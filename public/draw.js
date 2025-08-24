@@ -3,7 +3,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const sessionId = urlParams.get('sessionId');
 const joinContainer = document.getElementById('join-container');
 const ___INITIAL_PROMPT_VALE = "be bright and varied when describing this: 'Dark, Emotional, Party.'";
-
+const ___INITIAL_NEGATIVE_PROMPT_VALE = "blurry, low quality, flat, 2d"
 // --- ✨ LOGICA JAVASCRIPT INVERTITA ---
 if (sessionId) {
     // Se l'ID è nell'URL, nascondi l'overlay del form di join.
@@ -30,8 +30,7 @@ if (sessionId) {
 
     const updateBtn = document.getElementById('update-params-btn');
     const promptInput = document.getElementById('prompt');
-    const negativePromptInput = document.getElementById('negative-prompt');
-
+    
     async function handleStartStream() {
         try {
             canvasStream = fluidCanvas.captureStream();
@@ -44,7 +43,7 @@ if (sessionId) {
                     "prompt_interpolation_method": "slerp",
                     "normalize_prompt_weights": true,
                     "normalize_seed_weights": true,
-                    // "negative_prompt": negativePromptInput.value,
+                    "negative_prompt": ___INITIAL_NEGATIVE_PROMPT_VALE,
                     // "num_inference_steps": 50,
                     // "seed": 42,
                     // "t_index_list": [
@@ -141,7 +140,7 @@ if (sessionId) {
     async function handleUpdateParams() {
         if (!streamId) return;
         updateBtn.disabled = true;
-        const paramsPayload = { "params": { "prompt": promptInput.value, "negative_prompt": negativePromptInput.value, "model_id": "stabilityai/sd-turbo", "prompt_interpolation_method": "slerp", "normalize_prompt_weights": true, "normalize_seed_weights": true, "num_inference_steps": 50, "seed": 42, "t_index_list": [2, 4, 6], "controlnets": [{ "conditioning_scale": 0, "control_guidance_end": 1, "control_guidance_start": 0, "enabled": true, "model_id": "thibaud/controlnet-sd21-openpose-diffusers", "preprocessor": "pose_tensorrt", "preprocessor_params": {} }, { "conditioning_scale": 0, "control_guidance_end": 1, "control_guidance_start": 0, "enabled": true, "model_id": "thibaud/controlnet-sd21-hed-diffusers", "preprocessor": "soft_edge", "preprocessor_params": {} }, { "conditioning_scale": 0, "control_guidance_end": 1, "control_guidance_start": 0, "enabled": true, "model_id": "thibaud/controlnet-sd21-canny-diffusers", "preprocessor": "canny", "preprocessor_params": { "high_threshold": 200, "low_threshold": 100 } }, { "conditioning_scale": 0, "control_guidance_end": 1, "control_guidance_start": 0, "enabled": true, "model_id": "thibaud/controlnet-sd21-depth-diffusers", "preprocessor": "depth_tensorrt", "preprocessor_params": {} }, { "conditioning_scale": 0, "control_guidance_end": 1, "control_guidance_start": 0, "enabled": true, "model_id": "thibaud/controlnet-sd21-color-diffusers", "preprocessor": "passthrough", "preprocessor_params": {} }] } };
+        const paramsPayload = { "params": { "prompt": promptInput.value, "model_id": "stabilityai/sd-turbo", "prompt_interpolation_method": "slerp", "normalize_prompt_weights": true, "normalize_seed_weights": true, "num_inference_steps": 50, "seed": 42, "t_index_list": [2, 4, 6], "controlnets": [{ "conditioning_scale": 0, "control_guidance_end": 1, "control_guidance_start": 0, "enabled": true, "model_id": "thibaud/controlnet-sd21-openpose-diffusers", "preprocessor": "pose_tensorrt", "preprocessor_params": {} }, { "conditioning_scale": 0, "control_guidance_end": 1, "control_guidance_start": 0, "enabled": true, "model_id": "thibaud/controlnet-sd21-hed-diffusers", "preprocessor": "soft_edge", "preprocessor_params": {} }, { "conditioning_scale": 0, "control_guidance_end": 1, "control_guidance_start": 0, "enabled": true, "model_id": "thibaud/controlnet-sd21-canny-diffusers", "preprocessor": "canny", "preprocessor_params": { "high_threshold": 200, "low_threshold": 100 } }, { "conditioning_scale": 0, "control_guidance_end": 1, "control_guidance_start": 0, "enabled": true, "model_id": "thibaud/controlnet-sd21-depth-diffusers", "preprocessor": "depth_tensorrt", "preprocessor_params": {} }, { "conditioning_scale": 0, "control_guidance_end": 1, "control_guidance_start": 0, "enabled": true, "model_id": "thibaud/controlnet-sd21-color-diffusers", "preprocessor": "passthrough", "preprocessor_params": {} }] } };
         try {
             const response = await fetch(`${API_BASE_URL}/v1/streams/${streamId}`, {
                 method: 'PATCH',

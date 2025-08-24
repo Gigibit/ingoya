@@ -8,7 +8,6 @@ import { dirname } from 'path';
 
 // Importazioni per la logica AI
 import dotenv from 'dotenv';
-import { YoutubeTranscript } from 'youtube-transcript';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 
@@ -32,55 +31,84 @@ app.use(express.static("public"));
 // -----------------------------------------------------------------------------
 app.post('/summarize', async (req, res) => {
     const { youtubeUrl } = req.body;
-
     if (!youtubeUrl) {
         return res.status(400).json({ error: "URL del video mancante." });
     }
 
+    const tempVideoPath = path.join(os.tmpdir(), `video-${Date.now()}.mp4`);
+    const CLIP_DURATION = 20; // 20 secondi per ogni clip
+
     try {
-        console.log(`🔎 Recupero trascrizione per: ${youtubeUrl}`);
-        // 1. Ottieni la trascrizione dal video
-        const transcriptData = await YoutubeTranscript.fetchTranscript(youtubeUrl);
-        if (!transcriptData || transcriptData.length === 0) {
-            return res.status(404).json({ error: "Trascrizione non trovata per questo video." });
-        }
-        const transcript = transcriptData.map(t => t.text).join(' ');
-        console.log("✅ Trascrizione ottenuta.");
+        // --- PASSO 1: Ottieni la durata del video con play-dl ---
+        console.log("ℹ️  Recupero informazioni video...");
+        const info = await play.video_info(youtubeUrl);
+        const duration = info.video_details.durationInSec;
+        console.log(`⏱️  Durata totale: ${duration} secondi.`);
 
-        // 2. Prepara la richiesta per l'AI
-        const prompt = `Fornisci una sintesi in esattamente tre parole, in italiano, per il seguente testo:\n\n"${transcript}"`;
-        let summary = '';
+        // --- PASSO 2: Ottieni gli URL degli stream con yt-dlp ---
+        console.log("🔗 Ottenendo URL degli stream...");
+        const streamInfo = await ytdlp(youtubeUrl, {
+            dumpSingleJson: true,
+            format: 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]', // best video + best audio
+        });
+        const videoUrl = streamInfo.url; // URL diretto al video
 
-        // 3. Esegui la chiamata all'AI scelta (parametrica)
-        if (process.env.AI_PROVIDER === 'gemini') {
-            console.log("🤖 Chiedo a Gemini...");
-            const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-            const result = await model.generateContent(prompt);
-            summary = result.response.text();
+        // --- PASSO 3: Usa FFmpeg per tagliare e unire le clip ---
+        console.log("✂️  Elaborazione con FFmpeg per estrarre 3 clip da 20s...");
+        const middle_start = Math.max(0, (duration / 2) - (CLIP_DURATION / 2));
+        const end_start = Math.max(0, duration - CLIP_DURATION);
 
-        } else if (process.env.AI_PROVIDER === 'openai') {
-            console.log("🤖 Chiedo a OpenAI...");
-            const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-            const response = await openai.chat.completions.create({
-                model: "gpt-4o-mini",
-                messages: [
-                    { role: "system", content: "Sei un esperto nel sintetizzare testi. Rispondi sempre e solo con tre parole in italiano." },
-                    { role: "user", content: prompt }
-                ],
-                temperature: 0.5,
-            });
-            summary = response.choices[0].message.content;
-        } else {
-             return res.status(500).json({ error: "AI Provider non configurato correttamente nel file .env" });
-        }
+        await new Promise((resolve, reject) => {
+            ffmpeg(videoUrl) // Diamo a FFmpeg l'URL diretto dello stream
+                .complexFilter([
+                    // Trimma la clip iniziale
+                    `[0:v]trim=start=0:end=${CLIP_DURATION},setpts=PTS-STARTPTS[v0]`,
+                    `[0:a]atrim=start=0:end=${CLIP_DURATION},asetpts=PTS-STARTPTS[a0]`,
+                    // Trimma la clip centrale
+                    `[0:v]trim=start=${middle_start}:end=${middle_start + CLIP_DURATION},setpts=PTS-STARTPTS[v1]`,
+                    `[0:a]atrim=start=${middle_start}:end=${middle_start + CLIP_DURATION},asetpts=PTS-STARTPTS[a1]`,
+                    // Trimma la clip finale
+                    `[0:v]trim=start=${end_start}:end=${duration},setpts=PTS-STARTPTS[v2]`,
+                    `[0:a]atrim=start=${end_start}:end=${duration},asetpts=PTS-STARTPTS[a2]`,
+                    // Concatena le 3 clip (video e audio)
+                    '[v0][a0][v1][a1][v2][a2]concat=n=3:v=1:a=1[outv][outa]'
+                ])
+                .map(['[outv]', '[outa]']) // Mappa l'output del filtro
+                .save(tempVideoPath)
+                .on('end', resolve)
+                .on('error', reject);
+        });
+
+        console.log(`✅ Clip finale di ${CLIP_DURATION * 3}s salvata in: ${tempVideoPath}`);
+
+        // --- PASSO 4 & 5: Prepara il file e invialo a Gemini (invariato) ---
+        console.log("📤 Preparazione file per Gemini...");
+        const videoFile = {
+            inlineData: {
+                data: Buffer.from(fs.readFileSync(tempVideoPath)).toString("base64"),
+                mimeType: "video/mp4",
+            },
+        };
+
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
+        const prompt = "Analizza attentamente queste tre clip (inizio, centro e fine di un video) e riassumi il contenuto visivo, l'atmosfera e la narrazione dell'intero video in esattamente tre parole in italiano.";
+
+        console.log("🤖 Invio clip a Gemini per l'analisi...");
+        const result = await model.generateContent([prompt, videoFile]);
+        const summary = result.response.text();
         
-        console.log(`✨ Sintesi: ${summary}`);
+        console.log(`✨ Sintesi video finale: ${summary}`);
         res.json({ summary: summary.trim() });
 
     } catch (error) {
-        console.error("ERRORE:", error.message);
-        res.status(500).json({ error: "Impossibile processare il video. Potrebbe non avere sottotitoli disponibili o l'URL non è valido." });
+        console.error("ERRORE NEL PROCESSO VIDEO:", error);
+        res.status(500).json({ error: error.message || "Impossibile processare la richiesta video." });
+    } finally {
+        if (fs.existsSync(tempVideoPath)) {
+            fs.unlinkSync(tempVideoPath);
+            console.log("🗑️  File video temporaneo rimosso.");
+        }
     }
 });
 
