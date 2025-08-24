@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script type="text/javascript" src="dat.gui.min.js"></script>
+
+    <title>Interactive WebGL Fluid Stream</title>
+    <style>
+        .dg{
+            display: none;
+        }
+        :root {
+            --background-color: #1a1a2e;
+            --container-bg: rgba(22, 33, 62, 0.85);
+            --primary-color: #0f3460;
+            --accent-color: #e94560;
+            --text-color: #e0e0e0;
+            --border-radius: 12px;
+            --font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+            --shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            color: var(--text-color);
+            font-family: var(--font-family);
+        }
+
+        #main-container {
+            display: flex;
+            flex-direction: column;
+            width: 100vw;
+            height: 100vh;
+            padding: 1.5rem;
+            box-sizing: border-box;
+            gap: 1.5rem;
+        }
+
+        #top-section {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 0;
+        }
+
+        .video-wrapper {
+            width: 100%;
+            height: 100%;
+            max-width: 1280px;
+            aspect-ratio: 16 / 9;
+            background: rgba(0,0,0,0.5);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: var(--shadow);
+        }
+
+        iframe {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        #output-placeholder {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            color: #888;
+            font-size: 1.2rem;
+        }
+
+        #bottom-section {
+            display: grid;
+            grid-template-columns: 360px 1fr;
+            gap: 1.5rem;
+            height: 40vh;
+        }
+        
+        #controls-column, #canvas-container {
+            background-color: var(--container-bg);
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow-y: auto;
+        }
+        
+        #canvas-container {
+            padding: 0;
+            overflow: hidden;
+        }
+
+        #fluidCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            border-radius: var(--border-radius);
+        }
+
+        .control-group {
+            margin-bottom: 1rem;
+        }
+
+        label {
+            font-weight: bold;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        input[type="text"], input[type="number"], textarea {
+            background-color: var(--primary-color);
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 0.75rem;
+            color: var(--text-color);
+            font-size: 0.9rem;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        
+        button {
+            background: linear-gradient(45deg, var(--accent-color), #f97a8b);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(233, 69, 96, 0.4);
+        }
+        
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid var(--primary-color);
+            margin: 1.5rem 0;
+        }
+
+        h3 {
+            margin-top: 0;
+            color: var(--accent-color);
+            text-shadow: 0 0 5px var(--accent-color);
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 8px; cursor: pointer;
+            background: var(--primary-color); border-radius: 5px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 18px; width: 18px; border-radius: 50%;
+            background: var(--accent-color); cursor: pointer;
+            -webkit-appearance: none; margin-top: -5px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="main-container">
+        <div id="top-section">
+            <div class="video-wrapper">
+                <div id="output-placeholder">AI Output Stream</div>
+            </div>
+        </div>
+
+        <div id="bottom-section">
+            <div id="controls-column">
+                <h3>Master Control</h3>
+                <button id="start-stream-btn">🚀 Start AI Stream</button>
+                <div id="status" style="text-align:center; padding:0.5rem; margin-top:0.5rem; border-radius:6px;">Waiting to start...</div>
+                
+                <hr>
+                <h3>AI Stream Parameters</h3>
+                 <div class="control-group">
+                    <label for="prompt">Prompt ✨</label>
+                    <textarea id="prompt" rows="3">a vibrant, colorful, cinematic masterpiece</textarea>
+                </div>
+                <div class="control-group">
+                    <label for="negative-prompt">Negative Prompt 👎</label>
+                    <textarea id="negative-prompt" rows="2">blurry, low quality, flat, 2d</textarea>
+                </div>
+                <button id="update-params-btn" disabled>🌀 Update AI Parameters</button>
+            </div>
+            <div id="canvas-container">
+                <canvas id="fluidCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+    <script type="text/javascript" src="webgl.js"></script>
+
+    <script>
+        const canvasElement = document.getElementById('fluidCanvas');
+            
+            // --- Define the simulation configuration in an object ---
+            // --- Initialize WebGL Simulation ---
+            // The simulation script attaches its API to the window object
+            //window.fluid.simulation(canvasElement, fluidConfig);
+
+        // --- CONFIGURATION ---
+        const API_KEY = "sk_iK9uX4DPSmmGekB8McXnJGEKB3wWWozjtKKjUKa3WBVirYxMtXL5GLrZiTJZQ8Pb";
+        const API_BASE_URL = "https://api.daydream.live";
+        const PIPELINE_ID = "pip_qpUgXycjWF6YMeSL";
+
+        // --- STREAMING STATE ---
+        let streamId = null;
+        let whipUrl = null;
+        let playbackId = null;
+        let peerConnection = null;
+        let canvasStream = null;
+
+        // --- DOM ELEMENTS ---
+        const startBtn = document.getElementById('start-stream-btn');
+        const updateBtn = document.getElementById('update-params-btn');
+        const statusDiv = document.getElementById('status');
+        const outputContainer = document.querySelector('.video-wrapper');
+        const promptInput = document.getElementById('prompt');
+        const negativePromptInput = document.getElementById('negative-prompt');
+
+
+
+        // // --- STREAMING FUNCTIONS ---
+        // function setStatus(message, isError = false) {
+        //     statusDiv.textContent = message;
+        //     statusDiv.style.color = isError ? '#ff6b6b' : '#45e9a0';
+        //     statusDiv.style.backgroundColor = isError ? 'rgba(255, 107, 107, 0.2)' : 'rgba(69, 233, 160, 0.2)';
+        // }
+
+        async function handleStartStream() {
+            startBtn.disabled = true;
+            setStatus('🚀 Initializing...');
+
+            try {
+                setStatus('🎨 Capturing canvas stream...');
+                // canvasStream = fluidCanvas.captureStream(30);
+
+                setStatus('📡 Creating API stream...');
+                const createStreamResponse = await fetch(`${API_BASE_URL}/v1/streams`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pipeline_id: PIPELINE_ID })
+                });
+                if (!createStreamResponse.ok) throw new Error(`API Error: ${createStreamResponse.statusText}`);
+                const streamData = await createStreamResponse.json();
+                streamId = streamData.id;
+                whipUrl = streamData.whip_url;
+                playbackId = streamData.output_playback_id;
+
+                const iframe = document.createElement('iframe');
+                iframe.src = `https://lvpr.tv/?v=${playbackId}&lowLatency=force`;
+                iframe.allow = "autoplay; encrypted-media; picture-in-picture";
+                iframe.allowFullscreen = true;
+                outputContainer.innerHTML = '';
+                outputContainer.appendChild(iframe);
+
+                setStatus('🔗 Connecting to WebRTC endpoint...');
+                peerConnection = new RTCPeerConnection();
+                // canvasStream.getTracks().forEach(track => peerConnection.addTrack(track, canvasStream));
+
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+
+                const whipResponse = await fetch(whipUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/sdp' },
+                    body: peerConnection.localDescription.sdp
+                });
+                if (!whipResponse.ok) throw new Error(`WHIP connection failed: ${whipResponse.statusText}`);
+                
+                const answerSdp = await whipResponse.text();
+                await peerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+                
+                setStatus('✅ Streaming Live!');
+                startBtn.textContent = 'Streaming...';
+                updateBtn.disabled = false;
+                await handleUpdateParams();
+
+            } catch (error) {
+                console.error('Error starting stream:', error);
+                setStatus(`Error: ${error.message}`, true);
+                startBtn.disabled = false;
+            }
+        }
+        
+        async function handleUpdateParams() {
+            if (!streamId) return;
+            updateBtn.disabled = true;
+            updateBtn.textContent = 'Updating...';
+
+            const paramsPayload = {
+                model_id: "streamdiffusion",
+                pipeline: "live-video-to-video",
+                params: {
+                    model_id: "stabilityai/sd-turbo",
+                    prompt: promptInput.value,
+                    negative_prompt: negativePromptInput.value,
+                }
+            };
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/v1/streams/${streamId}/prompts`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(paramsPayload)
+                });
+                if (!response.ok) throw new Error(`API Update Error: ${response.statusText}`);
+                setStatus('✅ AI Parameters Updated!');
+            } catch (error) {
+                console.error('Error updating parameters:', error);
+                setStatus(`Update Error: ${error.message}`, true);
+            } finally {
+                updateBtn.disabled = false;
+                updateBtn.textContent = '🌀 Update AI Parameters';
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+        startBtn.addEventListener('click', handleStartStream);
+        updateBtn.addEventListener('click', handleUpdateParams);
+
+    </script>
+</body>
+</html>

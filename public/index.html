@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crea Sessione</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        /* --- 2. NUOVO STILE CARTOON CON LA TUA PALETTE --- */
+        :root {
+            --background-color: #fffacd; /* Giallo pallido (Lemon Chiffon) */
+            --container-bg: #ffffff;
+            --accent-color: #d4c68a;   /* Cachi scuro / Oro antico */
+            --text-color: #1c1c1e;
+            --border-color: #1c1c1e;
+            --border-radius: 16px;
+            --font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --shadow-color: #1c1c1e; /* Usiamo il colore del bordo per l'ombra netta */
+            --success-color: #28a745; /* Verde per lo stato "connesso" */
+        }
+
+        body {
+            font-family: var(--font-family);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+
+        .container {
+            text-align: center;
+            padding: 40px;
+            background: var(--container-bg);
+            border-radius: var(--border-radius);
+            border: 3px solid var(--border-color);
+            box-shadow: 8px 8px 0px var(--shadow-color); /* Ombra netta stile cartoon */
+        }
+        
+        h1 {
+            font-weight: 900; /* Più "bold" per un look più forte */
+            margin-top: 0;
+            margin-bottom: 30px;
+        }
+
+        #qrcode {
+            margin: 20px auto 0 auto;
+            padding: 10px;
+            border: 3px solid var(--border-color); /* Bordo consistente */
+            display: inline-block;
+            background: white;
+        }
+        
+        #session-code-display {
+            font-family: monospace;
+            font-size: 2.5rem;
+            font-weight: bold;
+            letter-spacing: 4px;
+            color: var(--text-color);
+            background-color: #f7f7f7;
+            padding: 15px 25px;
+            border-radius: 8px;
+            margin-top: 35px;
+            border: 3px dashed var(--accent-color); /* Bordo tratteggiato con colore accent */
+            transition: all 0.3s ease;
+        }
+
+        #session-code-display.connected {
+            border-color: var(--success-color); /* Bordo verde quando connesso */
+            border-style: solid; /* Il bordo diventa solido */
+            color: var(--success-color);
+            transform: scale(1.05); /* Un piccolo effetto di "pop" */
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Scansiona o inserisci il codice</h1>
+        <div id="qrcode"></div>
+        <div id="session-code-display"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="paint.js"></script>
+</body>
+</html>

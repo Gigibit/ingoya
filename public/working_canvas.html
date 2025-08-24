@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script type="text/javascript" src="dat.gui.min.js"></script>
+    <title>WebGL Fluid Live Stream</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+        #fluidCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        #main-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            display: flex;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #controls {
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 8px;
+            width: 300px;
+            height: fit-content;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+      .control-group {
+            margin-bottom: 15px;
+        }
+      .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        #player-container {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding-left: 20px;
+        }
+        #player-placeholder {
+            width: 100%;
+            max-width: 960px;
+            aspect-ratio: 16 / 9;
+            background-color: #111;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 18px;
+            color: #888;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        #player-placeholder iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 8px;
+        }
+        #startStreamBtn {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            background-color: #00a65a;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #startStreamBtn:hover {
+            background-color: #008d4c;
+        }
+        #startStreamBtn:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="fluidCanvas"></canvas>
+    <script type="text/javascript" src="webgl.js"></script>
+
+    <script>
+        // FIX 2: Wait for the DOM to be fully loaded before running any script that interacts with it.
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvasElement = document.getElementById('fluidCanvas');
+            
+            // --- Define the simulation configuration in an object ---
+            const fluidConfig = {
+                SIM_RESOLUTION: 128,
+                DYE_RESOLUTION: 1024,
+                CAPTURE_RESOLUTION: 512,
+                DENSITY_DISSIPATION: 1,
+                VELOCITY_DISSIPATION: 0.2,
+                PRESSURE: 0.8,
+                PRESSURE_ITERATIONS: 20,
+                CURL: 30,
+                SPLAT_RADIUS: 0.25,
+                SPLAT_FORCE: 6000,
+                SHADING: true,
+                COLORFUL: true,
+                COLOR_UPDATE_SPEED: 10,
+                PAUSED: false,
+                BACK_COLOR: { r: 0, g: 0, b: 0 },
+                TRANSPARENT: false,
+                BLOOM: true,
+                BLOOM_ITERATIONS: 8,
+                BLOOM_RESOLUTION: 256,
+                BLOOM_INTENSITY: 0.8,
+                BLOOM_THRESHOLD: 0.6,
+                BLOOM_SOFT_KNEE: 0.7,
+                SUNRAYS: true,
+                SUNRAYS_RESOLUTION: 196,
+                SUNRAYS_WEIGHT: 1.0,
+            };
+
+            // --- Initialize WebGL Simulation ---
+            // The simulation script attaches its API to the window object
+            //window.fluid.simulation(canvasElement, fluidConfig);
+
+            // --- Map UI Controls to the fluidConfig object ---
+            // This is more robust than relying on a global 'gui' object.
+            document.getElementById('densitySlider').addEventListener('input', e => fluidConfig.DENSITY_DISSIPATION = e.target.value);
+            document.getElementById('velocitySlider').addEventListener('input', e => fluidConfig.VELOCITY_DISSIPATION = e.target.value);
+            document.getElementById('pressureSlider').addEventListener('input', e => fluidConfig.PRESSURE = e.target.value);
+            document.getElementById('vorticitySlider').addEventListener('input', e => fluidConfig.CURL = e.target.value);
+            document.getElementById('shadingToggle').addEventListener('change', e => fluidConfig.SHADING = e.target.checked);
+            document.getElementById('bloomToggle').addEventListener('change', e => fluidConfig.BLOOM = e.target.checked);
+            document.getElementById('sunraysToggle').addEventListener('change', e => fluidConfig.SUNRAYS = e.target.checked);
+
+ 
+        });
+    </script>
+</body>
+</html>
