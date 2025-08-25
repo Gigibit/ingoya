@@ -116,6 +116,7 @@ app.post('/summarize', async (req, res) => {
 // -----------------------------------------------------------------------------
 // IL TUO CODICE SOCKET.IO ESISTENTE (invariato)
 // -----------------------------------------------------------------------------
+app.get('/self-drawing', (_, res) => res.sendFile(path.join(__dirname, 'public', 'self_drawing.html')));
 app.get('/paint', (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/draw', (_, res) => res.sendFile(path.join(__dirname, "public", "draw.html")));
 app.get('/', (_, res) => res.sendFile(path.join(__dirname, "public", "summarize.html"))); // Modificato per puntare al nuovo file
