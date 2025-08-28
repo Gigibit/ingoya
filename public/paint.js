@@ -24,14 +24,67 @@ socket.on('user-joined', () => {
     codeDisplay.classList.add('connected');
 });
 
+async function handleStartPlayback(whepUrl, videoElement) {
+        var pollIntervall = 2000
+        let retryId = setInterval(async () => {
+            try {
+                const peerConnection = new RTCPeerConnection();
+
+                // Questa funzione viene chiamata quando arriva uno stream video dal server
+                peerConnection.ontrack = (event) => {
+                    console.log("Traccia video ricevuta, la collego all'elemento video.");
+                    if (videoElement.srcObject !== event.streams[0]) {
+                        videoElement.srcObject = event.streams[0];
+                    }
+                };
+
+                // WHEP richiede che il client invii un'offerta per ricevere il video
+                const offer = await peerConnection.createOffer({
+                    offerToReceiveVideo: true // Specifichiamo che vogliamo ricevere video
+                });
+                await peerConnection.setLocalDescription(offer);
+
+                // Invia l'offerta (SDP) all'endpoint WHEP
+                const whepResponse = await fetch(whepUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/sdp'
+                    },
+                    body: peerConnection.localDescription.sdp
+                });
+
+                if (!whepResponse.ok) {
+                    throw new Error(`Connessione WHEP fallita: ${whepResponse.statusText}`);
+
+                } else clearInterval(retryId)
+                // Ricevi la risposta (SDP) dal server e imposta la remote description
+                const answerSdp = await whepResponse.text();
+                // --- AGGIUNGI QUESTO LOG ---
+                console.log("--- Risposta SDP ricevuta dal server WHEP ---");
+                console.log(answerSdp);
+                // --------------------------
+                await peerConnection.setRemoteDescription({
+                    type: 'answer',
+                    sdp: answerSdp
+                });
+
+                console.log("Connessione WHEP stabilita con successo! ✨");
+                loader.classList.add('hidden');
+                
+            } catch (error) {
+                console.error('Errore durante l\'avvio del playback WHEP:', error);
+            }
+        }, pollIntervall)
+}
 socket.on('url-received', (url) => {
     document.body.className = 'iframe-mode';
 
-    const iframe = document.createElement('iframe');
-    iframe.src = url;
-    iframe.style.width = '100vw';
-    iframe.style.height = '100vh';
-    iframe.style.border = 'none';
+    const videoElement = document.createElement('video');
+    videoElement.src = url;
+    videoElement.style.width = '100vw';
+    videoElement.style.height = '100vh';
+    videoElement.style.border = 'none';
     document.body.innerHTML = '';
-    document.body.appendChild(iframe);
+    document.body.appendChild(videoElement);
+    handleStartPlayback(url, videoElement)
 });

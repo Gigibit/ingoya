@@ -1257,6 +1257,10 @@ initFramebuffers();
 
 let lastUpdateTime = Date.now();
 let colorUpdateTimer = 0.0;
+// Variabili per gestire le esplosioni automatiche
+let autoExplosionTimer = 0.0;
+// Imposta il primo intervallo casuale per l'esplosione (tra 5 e 15 secondi)
+let nextExplosionTime = 5.0 + Math.random() * 10.0;
 update();
 
 function update () {
@@ -1264,6 +1268,18 @@ function update () {
     if (resizeCanvas())
         initFramebuffers();
     updateColors(dt);
+    // Controlla se è il momento di un'esplosione automatica, solo se non è in pausa
+    if (!config.PAUSED) {
+        autoExplosionTimer += dt;
+        if (autoExplosionTimer >= nextExplosionTime) {
+            // Esegue un'esplosione con un numero casuale di "splat"
+            multipleSplats(parseInt(Math.random() * 10) + 10);
+            
+            // Resetta il timer e imposta un nuovo intervallo casuale per la prossima esplosione
+            autoExplosionTimer = 0.0;
+            nextExplosionTime = 5.0 + Math.random() * 10.0; // Prossima tra 5 e 15 secondi
+        }
+    }
     applyInputs();
 
     // Integriamo l'analisi audio nel loop principale

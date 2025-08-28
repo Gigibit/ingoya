@@ -1,17 +1,21 @@
-// Importazioni esistenti e nuove
-import express from "express";
-import { createServer } from "http";
-import { Server } from "socket.io";
+// Per usare la sintassi 'import', aggiungi "type": "module" al tuo file package.json
+
+// --- IMPORTAZIONI ESISTENTI E NUOVE ---
+import dotenv from 'dotenv';
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-
-// Importazioni per la logica AI
-import dotenv from 'dotenv';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import multer from 'multer';
+import fs from 'fs';
 import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Carica le variabili d'ambiente dal file .env
+// --- SETUP INIZIALE ---
+// Assicurati di aver installato i pacchetti necessari:
+// npm install express socket.io dotenv openai @google/generative-ai multer
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -20,106 +24,96 @@ const PORT = process.env.PORT || 3000;
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer);
-
-// Middleware per leggere il JSON dalle richieste POST
-app.use(express.json());
-app.use(express.static("public"));
-
-// -----------------------------------------------------------------------------
-// NUOVO ENDPOINT PER LA SINTESI DEL VIDEO
-// -----------------------------------------------------------------------------
-app.post('/summarize', async (req, res) => {
-    const { youtubeUrl } = req.body;
-    if (!youtubeUrl) {
-        return res.status(400).json({ error: "URL del video mancante." });
-    }
-
-    const tempVideoPath = path.join(os.tmpdir(), `video-${Date.now()}.mp4`);
-    const CLIP_DURATION = 20; // 20 secondi per ogni clip
-
-    try {
-        // --- PASSO 1: Ottieni la durata del video con play-dl ---
-        console.log("ℹ️  Recupero informazioni video...");
-        const info = await play.video_info(youtubeUrl);
-        const duration = info.video_details.durationInSec;
-        console.log(`⏱️  Durata totale: ${duration} secondi.`);
-
-        // --- PASSO 2: Ottieni gli URL degli stream con yt-dlp ---
-        console.log("🔗 Ottenendo URL degli stream...");
-        const streamInfo = await ytdlp(youtubeUrl, {
-            dumpSingleJson: true,
-            format: 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]', // best video + best audio
-        });
-        const videoUrl = streamInfo.url; // URL diretto al video
-
-        // --- PASSO 3: Usa FFmpeg per tagliare e unire le clip ---
-        console.log("✂️  Elaborazione con FFmpeg per estrarre 3 clip da 20s...");
-        const middle_start = Math.max(0, (duration / 2) - (CLIP_DURATION / 2));
-        const end_start = Math.max(0, duration - CLIP_DURATION);
-
-        await new Promise((resolve, reject) => {
-            ffmpeg(videoUrl) // Diamo a FFmpeg l'URL diretto dello stream
-                .complexFilter([
-                    // Trimma la clip iniziale
-                    `[0:v]trim=start=0:end=${CLIP_DURATION},setpts=PTS-STARTPTS[v0]`,
-                    `[0:a]atrim=start=0:end=${CLIP_DURATION},asetpts=PTS-STARTPTS[a0]`,
-                    // Trimma la clip centrale
-                    `[0:v]trim=start=${middle_start}:end=${middle_start + CLIP_DURATION},setpts=PTS-STARTPTS[v1]`,
-                    `[0:a]atrim=start=${middle_start}:end=${middle_start + CLIP_DURATION},asetpts=PTS-STARTPTS[a1]`,
-                    // Trimma la clip finale
-                    `[0:v]trim=start=${end_start}:end=${duration},setpts=PTS-STARTPTS[v2]`,
-                    `[0:a]atrim=start=${end_start}:end=${duration},asetpts=PTS-STARTPTS[a2]`,
-                    // Concatena le 3 clip (video e audio)
-                    '[v0][a0][v1][a1][v2][a2]concat=n=3:v=1:a=1[outv][outa]'
-                ])
-                .map(['[outv]', '[outa]']) // Mappa l'output del filtro
-                .save(tempVideoPath)
-                .on('end', resolve)
-                .on('error', reject);
-        });
-
-        console.log(`✅ Clip finale di ${CLIP_DURATION * 3}s salvata in: ${tempVideoPath}`);
-
-        // --- PASSO 4 & 5: Prepara il file e invialo a Gemini (invariato) ---
-        console.log("📤 Preparazione file per Gemini...");
-        const videoFile = {
-            inlineData: {
-                data: Buffer.from(fs.readFileSync(tempVideoPath)).toString("base64"),
-                mimeType: "video/mp4",
-            },
-        };
-
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
-        const prompt = "Analizza attentamente queste tre clip (inizio, centro e fine di un video) e riassumi il contenuto visivo, l'atmosfera e la narrazione dell'intero video in esattamente tre parole in italiano.";
-
-        console.log("🤖 Invio clip a Gemini per l'analisi...");
-        const result = await model.generateContent([prompt, videoFile]);
-        const summary = result.response.text();
-        
-        console.log(`✨ Sintesi video finale: ${summary}`);
-        res.json({ summary: summary.trim() });
-
-    } catch (error) {
-        console.error("ERRORE NEL PROCESSO VIDEO:", error);
-        res.status(500).json({ error: error.message || "Impossibile processare la richiesta video." });
-    } finally {
-        if (fs.existsSync(tempVideoPath)) {
-            fs.unlinkSync(tempVideoPath);
-            console.log("🗑️  File video temporaneo rimosso.");
-        }
+const io = new Server(httpServer, {
+    cors: {
+        origin: "*", // Per lo sviluppo, altrimenti specifica il tuo dominio client
+        methods: ["GET", "POST"]
     }
 });
 
+// Middleware per leggere il JSON e servire file statici
+app.use(express.json());
+app.use(express.static("public"));
 
-// -----------------------------------------------------------------------------
-// IL TUO CODICE SOCKET.IO ESISTENTE (invariato)
-// -----------------------------------------------------------------------------
+// Configurazione per salvare i file audio temporaneamente
+const upload = multer({ dest: 'uploads/' });
+
+// --- CONFIGURAZIONE API KEYS ---
+// Assicurati che queste chiavi siano nel tuo file .env
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+
+// --- FUNZIONI DI TRASCRIZIONE ---
+
+async function transcribeWithOpenAI(filePath) {
+    const transcription = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(filePath),
+        model: "whisper-1",
+    });
+    return transcription.text;
+}
+
+async function transcribeWithGemini(filePath) {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const audioBytes = fs.readFileSync(filePath).toString('base64');
+    
+    const audioPart = {
+      inlineData: {
+        mimeType: 'audio/webm', // Assicurati che il mimeType corrisponda a quello inviato dal client
+        data: audioBytes,
+      },
+    };
+
+    const result = await model.generateContent(["Trascrivi questo audio:", audioPart]);
+    return result.response.text();
+}
+
+
+app.post("/interpret", async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: "Manca testo" });
+
+    console.log("Testo ricevuto:", text);
+
+    const prompt = `
+      Analizza la frase dell'utente e restituisci una SEMPRE E SOLO UNA lista di keyword chiave esplicative e rappresentative del prompt separate da virgola (eg. "dio, relgione, musica, solitudine, compagnia..") "${text}"
+    `;
+
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0
+      })
+    });
+
+    const data = await r.json();
+    console.log(data.choices?.[0]?.message)
+    let responseText = data.choices?.[0]?.message?.content;
+
+    // Pulizia della risposta: rimuove blocchi di codice o spazi extra
+    responseText = responseText.trim();
+
+    res.json(responseText);
+
+  } catch (err) {
+    console.error("Errore interpretazione comando:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 app.get('/self-drawing', (_, res) => res.sendFile(path.join(__dirname, 'public', 'self_drawing.html')));
 app.get('/paint', (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/draw', (_, res) => res.sendFile(path.join(__dirname, "public", "draw.html")));
-app.get('/', (_, res) => res.sendFile(path.join(__dirname, "public", "summarize.html"))); // Modificato per puntare al nuovo file
+app.get('/', (_, res) => res.sendFile(path.join(__dirname, "public", "summarize.html")));
 
 io.on('connection', (socket) => {
   console.log(`✅ Utente connesso: ${socket.id}`);
@@ -133,17 +127,12 @@ io.on('connection', (socket) => {
     socket.join(sessionId);
     console.log(`🔗 Partecipante ${socket.id} si è unito alla sessione: ${sessionId}`);
     
-    // ✨ 1. INVIA CONFERMA AL PARTECIPANTE
-    // Comunica a draw.html che è stato aggiunto correttamente alla stanza.
     socket.emit('session-joined', sessionId);
-
-    // Notifica all'host che qualcuno è entrato
     socket.to(sessionId).emit('user-joined', socket.id);
   });
 
   socket.on('share-url', ({ sessionId, url }) => {
     console.log(`🚀 URL [${url}] ricevuto per la sessione ${sessionId}`);
-    // Invia l'URL all'host (a tutti nella stanza tranne al mittente)
     socket.to(sessionId).emit('url-received', url);
   });
 
