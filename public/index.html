@@ -33,6 +33,7 @@
         }
 
         .container {
+            position: absolute;
             text-align: center;
             padding: 40px;
             background: var(--container-bg);
@@ -76,6 +77,86 @@
             transform: scale(1.05); /* Un piccolo effetto di "pop" */
         }
 
+        #video-container {
+            position: relative;
+            /* Necessario per posizionare il loader all'interno */
+            width: 100%;
+            height: 100%;
+            margin: 0 auto;
+            background-color: black;
+        }
+
+        #playback-video {
+            width: 100%;
+            height: 100%;
+        }
+
+        #loader {
+            position: absolute;
+            /* Sovrapponi al video */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-family: sans-serif;
+            z-index: 10;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #fff;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Classe per nascondere/mostrare il loader */
+        .hidden {
+            visibility: hidden;
+        }
+            .word-pop {
+            position: fixed; /* sopra a tutto, anche fuori dal video */
+            z-index: 9999;
+            font-family: 'Fredoka One', sans-serif;
+            font-weight: 400;
+            color: #fff;
+            text-shadow: 0 0 40px rgba(0,0,0,0.9), 0 0 80px rgba(255,255,255,0.6);
+            opacity: 0;
+            transform: scale(0.5) rotate(-10deg);
+            pointer-events: none;
+            white-space: nowrap;
+            transition: opacity 0.6s ease, transform 1s cubic-bezier(0.22, 1, 0.36, 1);
+            }
+
+            .word-pop.show {
+            opacity: 1;
+            transform: scale(1) rotate(0deg);
+            }
+
+            .word-pop.fadeout {
+            opacity: 0;
+            transform: scale(1.3) rotate(10deg);
+            transition: opacity 1.2s ease, transform 1.2s ease;
+            }
+
     </style>
 </head>
 <body>
@@ -85,8 +166,20 @@
         <div id="session-code-display"></div>
     </div>
 
+    <div id="video-container" class="hidden">
+        <video id="playback-video" autoplay playsinline></video>
+
+        <div id="loader">
+            <div class="spinner"></div>
+            <p>In attesa dello stream...</p>
+        </div>
+    </div>
+
+    <script>window.audioManaged = false</script>
+
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="interpreter.js"></script>
     <script src="paint.js"></script>
 </body>
 </html>

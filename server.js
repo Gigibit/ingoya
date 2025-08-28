@@ -136,6 +136,11 @@ io.on('connection', (socket) => {
     socket.to(sessionId).emit('url-received', url);
   });
 
+  socket.on('share-user-message', ({ sessionId, text, interpolation }) => {
+    console.log(`🚀 si chiacchiera pure qui: ${text}`);
+    socket.to(sessionId).emit('user-message-received', { text, interpolation });
+  });
+
   socket.on('disconnect', () => console.log(`❌ Utente disconnesso: ${socket.id}`));
 });
 

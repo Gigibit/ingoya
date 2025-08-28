@@ -1,10 +1,7 @@
-const updateBtn = document.getElementById('update-params-btn');
-const promptInput = document.getElementById('prompt');
-
 const start = () => {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    alert("Il tuo browser non supporta SpeechRecognition!");
+  const SpeechRecognition = ( window.SpeechRecognition || window.webkitSpeechRecognition);
+  if (!SpeechRecognition || !window.audioManaged) {
+    console.log("Il tuo browser non supporta SpeechRecognition, o non fu alcunché ch'io po' gestire");
     return;
   }
 
@@ -15,23 +12,29 @@ const start = () => {
 
   let finalTranscript = "";
 
- const onSentenceComplete = async (text) => {
-  console.log("🎯 Frase completa:", text);
+ const onSentenceComplete = async (userMessage) => {
+  console.log("🎯 Frase completa:", userMessage);
 
   try {
     const res = await fetch("/interpret", { 
       method: "POST", 
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ text:userMessage })
     });
 
-    text = await res.text();
-    promptInput.value = text.replace('"','')
-    updateBtn.click()
-    const words = (text).split(",");
-    words.forEach((w, i) => {
-      setTimeout(() => popWord(w.replace('"','')), i * 300); // effetto scaglionato
-    });
+    const text = await res.text();
+
+    if (window.selfMode){
+        popText(text)
+    }else {
+        const userMessageInterpolationEvent = new CustomEvent("usermessageinterpolation", {
+        detail: {
+                text: userMessage,
+                interpolation: text 
+            }
+        });
+        document.dispatchEvent(userMessageInterpolationEvent)
+    }
 
   } catch (err) {
     console.log("❌ Errore fetch /interpret:", err);
@@ -67,6 +70,12 @@ const start = () => {
 //  setTimeout(()=>recognition.stop() && setTimeout(()=>recognition.start(),4000))
 };
 
+function popWords(text){
+    const words = (text).split(",");
+    words.forEach((w, i) => {
+            setTimeout(() => popWord(w.replace('"','')), i * 300); // effetto scaglionato
+    });
+}
 
 function popWord(word) {
   const span = document.createElement("span");
@@ -99,5 +108,7 @@ function popWord(word) {
     span.remove();
   }, 4000);
 }
+
+document.addEventListener('popwords', (e)=> popWords(e.detail))
 
 window.addEventListener('load', start);

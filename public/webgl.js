@@ -63,6 +63,7 @@ function initAudio() {
     }
 
     startButton.addEventListener('click', async () => {
+        startButton.style.display = 'none'
         if (!audioContext) {
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }

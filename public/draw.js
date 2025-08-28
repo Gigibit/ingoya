@@ -1,56 +1,65 @@
 
+//O gioia, Ch'io non conobbi, essere amato amando!
+
 let socket = null;
 const urlParams = new URLSearchParams(window.location.search);
 const sessionId = urlParams.get('sessionId');
 const joinContainer = document.getElementById('join-container');
 const codeInputContainer = document.getElementById('code-input');
-const ___INITIAL_PROMPT_VALUE = "describe Abram.";
+const ___INITIAL_PROMPT_VALUE = "describe human beings.";
 const ___INITIAL_NEGATIVE_PROMPT_VALUE = "blurry, low quality, flat, 2d"
 const fluidCanvas = document.getElementById('fluidCanvas');
 const updateBtn = document.getElementById('update-params-btn');
 const promptInput = document.getElementById('prompt');
 const videoElement = document.getElementById('playback-video');
 const loader = document.getElementById('loader');
-videoElement.addEventListener('canplay', () => {
-    loader.style.display = 'none'; // nascondi spinner
-  });
+function initShared() {
+    socket = io();
+    joinContainer.style.display = 'none';
+    // Tutta la logica dell'app può ora partire, sapendo che il canvas è visibile.
+    socket.on('connect', () => {
+        console.log(`Connesso al server. In attesa di join...`);
+        socket.emit('join-session', sessionId);
+    });
 
-  // In alternativa: quando effettivamente inizia a suonare
-  videoElement.addEventListener('playing', () => {
-    loader.style.display = 'none';
-  });
+    socket.on('session-joined', (confirmedSessionId) => {
+        console.log(`Conferma ricevuta: unito alla sessione ${confirmedSessionId}`);
+        // Ora puoi inviare l'URL, ma è meglio farlo dopo aver creato lo stream
+    });
+ 
+}
 
-  // Se vuoi gestire anche il caso in cui torna in buffering
-  videoElement.addEventListener('waiting', () => {
-    loader.style.display = 'block';
-  });
+function initSelf(){
+    videoElement.addEventListener('canplay', () => {
+        loader.style.display = 'none'; // nascondi spinner
+    });
+
+    // In alternativa: quando effettivamente inizia a suonare
+    videoElement.addEventListener('playing', () => {
+        loader.style.display = 'none';
+    });
+
+    // Se vuoi gestire anche il caso in cui torna in buffering
+    videoElement.addEventListener('waiting', () => {
+        loader.style.display = 'block';
+    });
+
+}
 
 // --- ✨ LOGICA JAVASCRIPT INVERTITA ---
 if (sessionId || window.selfMode) {
     // Se l'ID è nell'URL, nascondi l'overlay del form di join.
 
-    if (!window.selfMode) {
-        socket = io();
+    if (window.selfMode) initSelf()
+    else initShared()
 
-        joinContainer.style.display = 'none';
-        // Tutta la logica dell'app può ora partire, sapendo che il canvas è visibile.
-        socket.on('connect', () => {
-            console.log(`Connesso al server. In attesa di join...`);
-            socket.emit('join-session', sessionId);
-        });
-
-        socket.on('session-joined', (confirmedSessionId) => {
-            console.log(`Conferma ricevuta: unito alla sessione ${confirmedSessionId}`);
-            // Ora puoi inviare l'URL, ma è meglio farlo dopo aver creato lo stream
-        });
-    }
     const API_KEY = "sk_iK9uX4DPSmmGekB8McXnJGEKB3wWWozjtKKjUKa3WBVirYxMtXL5GLrZiTJZQ8Pb";
     const API_BASE_URL = "https://api.daydream.live";
     const PIPELINE_ID = "pip_qpUgXycjWF6YMeSL";
 
-    let streamId = null, whipUrl = null, playbackId = null, peerConnection = null, canvasStream = null;
-    
-    async function handleStartPlayback(whepUrl, videoElement, sessionAlreadyEstabilished = false, pollIntervall = 1500) {
+    let streamId = null, whipUrl = null,  peerConnection = null, canvasStream = null;
+
+    async function handleStartPlayback(whepUrl, sessionAlreadyEstabilished = false, pollIntervall = 1500) {
         let retryId = setInterval(async () => {
             try {
                 const peerConnection = new RTCPeerConnection();
@@ -68,7 +77,6 @@ if (sessionId || window.selfMode) {
                     offerToReceiveVideo: true // Specifichiamo che vogliamo ricevere video
                 });
                 await peerConnection.setLocalDescription(offer);
-
                 // Invia l'offerta (SDP) all'endpoint WHEP
                 const whepResponse = await fetch(whepUrl, {
                     method: 'POST',
@@ -94,9 +102,9 @@ if (sessionId || window.selfMode) {
                 });
 
                 console.log("Connessione WHEP stabilita con successo! ✨");
-                if(!sessionAlreadyEstabilished){
+                if (!sessionAlreadyEstabilished) {
                     clearInterval(retryId)
-                    handleStartPlayback(whepUrl, videoElement, true, 10000)
+                    handleStartPlayback(whepUrl, true, 10000)
                 }
             } catch (error) {
                 console.error('Errore durante l\'avvio del playback WHEP:', error);
@@ -113,7 +121,7 @@ if (sessionId || window.selfMode) {
                 "pipeline_params": {
                     "model_id": "stabilityai/sd-turbo",
                     "prompt": ___INITIAL_PROMPT_VALUE,
-                    // ... altri parametri
+                    "negative_prompt": ___INITIAL_NEGATIVE_PROMPT_VALUE,
                 }
             };
 
@@ -130,10 +138,6 @@ if (sessionId || window.selfMode) {
             whipUrl = streamData.whip_url; // Questo è l'URL di INGEST (invio)
             playbackId = streamData.output_playback_id;
 
-            // --- MODIFICA #1: Rimuovi la costruzione dell'URL WHEP da qui ---
-            // NON costruire l'URL WHEP adesso. Lo otterremo dalla risposta WHIP.
-
-      
             peerConnection = new RTCPeerConnection();
             canvasStream.getTracks().forEach(track => peerConnection.addTrack(track, canvasStream));
             const offer = await peerConnection.createOffer();
@@ -155,18 +159,17 @@ if (sessionId || window.selfMode) {
             if (!locationHeader) {
                 throw new Error('Header Location mancante nella risposta WHIP.');
             }
-            console.log('headerrrr', locationHeader)
+            console.log('whepUrl: ', locationHeader)
             // -----------------------------------------------------------------
 
             const answerSdp = await whipResponse.text();
             await peerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
             console.log("Connessione WHIP stabilita con successo! ✔️");
 
-
-            if (!window.selfMode) socket.emit('share-url', { sessionId: sessionId, url: locationHeader });
-            else setTimeout(() => {
-                handleStartPlayback(locationHeader, videoElement);
-            }, 500); // Mezzo secondo di attesa dovrebbe essere sufficiente
+            setTimeout(() => {
+                if (!window.selfMode) socket.emit('share-url', { sessionId: sessionId, url: locationHeader });
+                else handleStartPlayback(locationHeader, videoElement);
+            }, 1500); // Mezzo secondo di attesa dovrebbe essere sufficiente
             // --------------------------------------------------------------------
 
             updateBtn.disabled = false;
@@ -186,11 +189,8 @@ if (sessionId || window.selfMode) {
                 "prompt": promptInput.value,
                 "model_id": "stabilityai/sd-turbo",
                 "prompt_interpolation_method": "slerp",
-                "normalize_prompt_weights": true,
                 "normalize_seed_weights": true,
                 "num_inference_steps": 50,
-                "seed": 42,
-                "t_index_list": [2, 4, 6]
                 // "controlnets": [
                 //     // ... (il tuo array di controlnets rimane qui, invariato)
                 //     { "conditioning_scale": 0, "control_guidance_end": 1, "control_guidance_start": 0, "enabled": true, "model_id": "thibaud/controlnet-sd21-openpose-diffusers", "preprocessor": "pose_tensorrt", "preprocessor_params": {} }, 
@@ -249,3 +249,12 @@ if (sessionId || window.selfMode) {
     });
 }
 
+document.addEventListener('usermessageinterpolation', function(e){
+    socket.emit('share-user-message', {
+        sessionId,
+        text: e.detail.text,
+        interpolation: e.detail.interpolation
+    })
+    promptInput.value = e.detail.interpolation
+    updateBtn.click()
+})
