@@ -35,39 +35,8 @@ const io = new Server(httpServer, {
 app.use(express.json());
 app.use(express.static("public"));
 
-// Configurazione per salvare i file audio temporaneamente
-const upload = multer({ dest: 'uploads/' });
-
-// --- CONFIGURAZIONE API KEYS ---
-// Assicurati che queste chiavi siano nel tuo file .env
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 
-// --- FUNZIONI DI TRASCRIZIONE ---
-
-async function transcribeWithOpenAI(filePath) {
-    const transcription = await openai.audio.transcriptions.create({
-        file: fs.createReadStream(filePath),
-        model: "whisper-1",
-    });
-    return transcription.text;
-}
-
-async function transcribeWithGemini(filePath) {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const audioBytes = fs.readFileSync(filePath).toString('base64');
-    
-    const audioPart = {
-      inlineData: {
-        mimeType: 'audio/webm', // Assicurati che il mimeType corrisponda a quello inviato dal client
-        data: audioBytes,
-      },
-    };
-
-    const result = await model.generateContent(["Trascrivi questo audio:", audioPart]);
-    return result.response.text();
-}
 
 
 app.post("/interpret", async (req, res) => {
@@ -78,7 +47,7 @@ app.post("/interpret", async (req, res) => {
     console.log("Testo ricevuto:", text);
 
     const prompt = `
-      Analizza la frase dell'utente e restituisci una SEMPRE E SOLO UNA lista di keyword chiave esplicative e rappresentative del prompt separate da virgola (eg. "dio, relgione, musica, solitudine, compagnia..") "${text}"
+      Analizza la frase dell'utente e restituisci una SEMPRE E SOLO UNA lista di 7 keywords riassuntive ed esplicative separate da una virgola (eg. "dio, relgione, musica, solitudine, compagnia..") "${text}"
     `;
 
     const r = await fetch("https://api.openai.com/v1/chat/completions", {

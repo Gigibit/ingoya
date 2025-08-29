@@ -27,6 +27,7 @@ videoElement.addEventListener('playing', () => {
 videoElement.addEventListener('waiting', () => {
     loader.style.display = 'block';
 });
+
 new QRCode(document.getElementById('qrcode'), { text: joinURL, width: 200, height: 200 });
 const socket = io();
 socket.on('connect', () => socket.emit('create-session', sessionId));
@@ -42,10 +43,11 @@ socket.on('user-message-received', (message) => {
     });
     document.dispatchEvent(popWords)
 });
-async function handleStartPlayback(whepUrl, sessionAlreadyEstabilished = false, pollIntervall = 5000) {
+async function handleStartPlayback(whepUrl, pollIntervall = 5000) {
     setTimeout(async () => {
         try {
             const peerConnection = new RTCPeerConnection();
+            handleStartPlayback(whepUrl, pollIntervall+2000)
 
             // Questa funzione viene chiamata quando arriva uno stream video dal server
             peerConnection.ontrack = (event) => {
@@ -85,10 +87,7 @@ async function handleStartPlayback(whepUrl, sessionAlreadyEstabilished = false, 
             });
 
             console.log("Connessione WHEP stabilita con successo! ✨");
-            if (!sessionAlreadyEstabilished) {
-                clearInterval(retryId)
-                handleStartPlayback(whepUrl, true, pollIntervall+500)
-            }
+            
         } catch (error) {
             console.error('Errore durante l\'avvio del playback WHEP:', error);
         }

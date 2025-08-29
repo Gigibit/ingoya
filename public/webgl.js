@@ -1213,7 +1213,7 @@ function resizeDoubleFBO (target, w, h, internalFormat, format, type, param) {
     return target;
 }
 
-function createTextureAsync (url) {
+function createTextureAsync () {
     let texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -1240,7 +1240,7 @@ function createTextureAsync (url) {
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image);
     };
-    image.src = url;
+    image.src = '';
 
     return obj;
 }
@@ -1299,8 +1299,13 @@ function calcDeltaTime () {
     lastUpdateTime = now;
     return dt;
 }
-
 function resizeCanvas () {
+    // MODIFICA: Se il canvas è nascosto (dimensioni 0), interrompi la funzione.
+    // Questo previene il crash del contesto WebGL.
+    if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
+        return false;
+    }
+
     let width = scaleByPixelRatio(canvas.clientWidth);
     let height = scaleByPixelRatio(canvas.clientHeight);
     if (canvas.width != width || canvas.height != height) {
@@ -1310,7 +1315,6 @@ function resizeCanvas () {
     }
     return false;
 }
-
 function updateColors (dt) {
     if (!config.COLORFUL) return;
 
@@ -1605,23 +1609,28 @@ window.addEventListener('mouseleave', () => {
 canvas.addEventListener('touchstart', e => {
     e.preventDefault();
     const touches = e.targetTouches;
+    const rect = canvas.getBoundingClientRect(); // Ottieni la posizione del canvas
     while (touches.length >= pointers.length)
         pointers.push(new pointerPrototype());
     for (let i = 0; i < touches.length; i++) {
-        let posX = scaleByPixelRatio(touches[i].pageX);
-        let posY = scaleByPixelRatio(touches[i].pageY);
+        // Calcola posX e posY relative al canvas
+        let posX = scaleByPixelRatio(touches[i].clientX - rect.left);
+        let posY = scaleByPixelRatio(touches[i].clientY - rect.top);
         updatePointerDownData(pointers[i + 1], touches[i].identifier, posX, posY);
     }
 });
 
+
 canvas.addEventListener('touchmove', e => {
     e.preventDefault();
     const touches = e.targetTouches;
+    const rect = canvas.getBoundingClientRect(); // Ottieni la posizione del canvas
     for (let i = 0; i < touches.length; i++) {
         let pointer = pointers[i + 1];
         if (!pointer.down) continue;
-        let posX = scaleByPixelRatio(touches[i].pageX);
-        let posY = scaleByPixelRatio(touches[i].pageY);
+        // Calcola posX e posY relative al canvas
+        let posX = scaleByPixelRatio(touches[i].clientX - rect.left);
+        let posY = scaleByPixelRatio(touches[i].clientY - rect.top);
         updatePointerMoveData(pointer, posX, posY);
     }
 }, false);
