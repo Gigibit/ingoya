@@ -9,7 +9,7 @@ function generateSessionId(length = 6) {
 const videoElement = document.getElementById('playback-video');
 const codeDisplay = document.getElementById('session-code-display');
 const sessionId = generateSessionId();
-const joinURL = `${window.location.origin}/draw?sessionId=${sessionId}`;
+const joinURL = `${window.location.origin}/self-drawing?sessionId=${sessionId}`;
 
 // ✨ Mostra subito il codice generato
 codeDisplay.textContent = sessionId;

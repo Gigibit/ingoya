@@ -22,7 +22,6 @@ const ___INITIAL_NEGATIVE_PROMPT_VALUE = "blurry, low quality, flat, 2d";
 
 function initShared() {
     socket = io();
-    joinContainer.style.display = 'none';
     socket.on('connect', () => {
         console.log(`Connesso al server. In attesa di join...`);
         socket.emit('join-session', sessionId);
@@ -38,9 +37,9 @@ function initSelf() {
     videoElement.addEventListener('waiting', () => loader.style.display = 'block');
 }
 
-if (sessionId || window.selfMode) {
-    if (window.selfMode) initSelf();
-    else initShared();
+ 
+    if (sessionId) initSelf();
+    initShared();
 
     const API_KEY = "sk_iK9uX4DPSmmGekB8McXnJGEKB3wWWozjtKKjUKa3WBVirYxMtXL5GLrZiTJZQ8Pb";
     const API_BASE_URL = "https://api.daydream.live";
@@ -134,8 +133,8 @@ if (sessionId || window.selfMode) {
             await peerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
             console.log("Connessione WHIP stabilita con successo! ✔️");
             setTimeout(() => {
-                if (!window.selfMode) socket.emit('share-url', { sessionId: sessionId, url: locationHeader });
-                else handleStartPlayback(locationHeader);
+                if (sessionId) socket.emit('share-url', { sessionId: sessionId, url: locationHeader });
+                handleStartPlayback(locationHeader);
             }, 1500);
             updateBtn.disabled = false;
         } catch (error) {
@@ -179,7 +178,7 @@ if (sessionId || window.selfMode) {
                 isCameraActive = true;
             } catch (err) {
                 console.error("Errore nell'accesso alla fotocamera: ", err);
-                alert("Non è stato possibile accedere alla fotocamera. Assicurati di aver concesso i permessi.");
+                alert("Non è stato possibile accedere alla fotocamera. Assicurati di aver concesso i permessi." + err);
             }
         } else {
             // --- Logica per RITORNARE AL CANVAS ---
@@ -214,24 +213,24 @@ if (sessionId || window.selfMode) {
         }
     });
 
-} else if (!window.selfMode) {
-    const joinBtn = document.getElementById('join-btn');
-    const codeInput = document.getElementById('code-input');
-    joinContainer.style.display = '';
-    joinContainer.style.position = 'fixed';
+// } else if (!window.selfMode) {
+//     const joinBtn = document.getElementById('join-btn');
+//     const codeInput = document.getElementById('code-input');
+//     joinContainer.style.display = '';
+//     joinContainer.style.position = 'fixed';
 
-    joinBtn.addEventListener('click', () => {
-        const code = codeInput.value.trim().toUpperCase();
-        if (code.length === 6) {
-            window.location.href = `${window.location.pathname}?sessionId=${code}`;
-        } else {
-            alert('Il codice deve essere di 6 caratteri.');
-        }
-    });
-    codeInput.addEventListener('keyup', (event) => {
-        if (event.key === 'Enter') joinBtn.click();
-    });
-}
+//     joinBtn.addEventListener('click', () => {
+//         const code = codeInput.value.trim().toUpperCase();
+//         if (code.length === 6) {
+//             window.location.href = `${window.location.pathname}?sessionId=${code}`;
+//         } else {
+//             alert('Il codice deve essere di 6 caratteri.');
+//         }
+//     });
+//     codeInput.addEventListener('keyup', (event) => {
+//         if (event.key === 'Enter') joinBtn.click();
+//     });
+// }
 
 document.addEventListener('usermessageinterpolation', function (e) {
     if (socket) socket.emit('share-user-message', {

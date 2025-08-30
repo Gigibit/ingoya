@@ -29,8 +29,7 @@ const start = () => {
       });
 
       const text = await res.text();
-
-      if (window.selfMode) popWords(text)
+      if(text.length > 2) popWords(text);
 
       const userMessageInterpolationEvent = new CustomEvent("usermessageinterpolation", {
         detail: {
@@ -75,10 +74,9 @@ const start = () => {
   function popWords(text) {
     const words = (text).split(",");
     words.forEach((w, i) => {
-      setTimeout(() => popWord(w.replace('"', '')), i * 300); // effetto scaglionato
+      setTimeout(() => popWord(w.replaceAll('"', '')), i * 300); // effetto scaglionato
     });
     recognition.stop()
-    setTimeout(() => recognition.start(), 4000)
   }
 
   function popWord(word) {

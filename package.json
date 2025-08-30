@@ -25,6 +25,7 @@
     "play-dl": "^1.9.7",
     "sequelize": "^6.37.7",
     "socket.io": "^4.8.1",
+    "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
     "yt-dlp-exec": "^1.0.2"
   }
