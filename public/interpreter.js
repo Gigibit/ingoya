@@ -79,7 +79,7 @@ const start = () => {
     // --- MODIFICA CHIAVE: Riavvia solo se l'utente non lo ha spento
     if (recognizing) {
       console.log("Riconoscimento terminato (timeout/naturale). Riparto automaticamente...");
-      recognition.start();
+      setTimeout(()=>recognition.start, 4000);
     } else {
       console.log("Riconoscimento terminato e lasciato spento.");
     }
@@ -95,7 +95,7 @@ const start = () => {
   function popWords(text) {
     const words = (text).split(",");
     words.forEach((w, i) => {
-      setTimeout(() => popWord(w.replaceAll(i/'"|\\'/g, '')), i * 300); // effetto scaglionato
+      setTimeout(() => popWord(w.replaceAll(/\\|"/g, '')), i * 300); // effetto scaglionato
     });
     // --- MODIFICA: RIMOSSO recognition.stop() per evitare il loop infinito
   }

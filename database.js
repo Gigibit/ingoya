@@ -16,7 +16,9 @@ export async function setupDatabase() {
     await db.exec(`
       CREATE TABLE IF NOT EXISTS sessions (
         sessionId TEXT PRIMARY KEY,
-        url TEXT, 
+        url TEXT,
+        isActive BOOL DEFAULT TRUE, 
+        creatorIp INTEGER DEFAULT NULL,
         participantCount INTEGER NOT NULL,
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )

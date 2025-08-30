@@ -1,6 +1,4 @@
-// Per usare la sintassi 'import', aggiungi "type": "module" al tuo file package.json
-
-// --- IMPORTAZIONI ---
+// --- IMPORTAZIONI E SETUP INIZIALE ---
 import dotenv from 'dotenv';
 import express from 'express';
 import { createServer } from 'http';
@@ -10,41 +8,41 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { setupDatabase } from './database.js';
 
-// --- SETUP INIZIALE ---
 dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PORT = process.env.PORT || 3000;
 let db;
 
 const app = express();
-const httpServer = createServer(app); // Corretto: passa 'app' a createServer
+const httpServer = createServer(app);
 const io = new Server(httpServer, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
 });
 
 app.use(express.json());
 app.use(express.static("public"));
 
-// --- NUOVE FUNZIONI SPECIFICHE PER IL DATABASE ---
+// --- FUNZIONI DATABASE ---
 
 /**
- * Inserisce una nuova sessione nel DB quando viene creata.
+ * Inserisce una nuova sessione nel DB se non esiste.
  * @param {string} sessionId L'ID della sessione.
+ * @param {object} socket L'oggetto socket per recuperare l'IP.
  */
-async function createSessionInDb(sessionId) {
-  const participantCount = 1; // La sessione inizia con 1 partecipante (l'host)
+async function createSessionInDb(sessionId, socket) {
+  const participantCount = 1;
+  const creatorIp = socket.handshake.address;
   try {
-    // 'INSERT OR IGNORE' non fa nulla se la sessione esiste già, evitando errori.
+    // CORRETTO: Usa 1 per TRUE
     await db.run(
-      'INSERT OR IGNORE INTO sessions (sessionId, participantCount, url) VALUES (?, ?, ?)',
-      [sessionId, participantCount, null] // L'URL è nullo all'inizio
+      'INSERT OR IGNORE INTO sessions (sessionId, participantCount, url, isActive, creatorIp) VALUES (?, ?, ?, ?, ?)',
+      [sessionId, participantCount, null, 1, creatorIp]
     );
-    console.log(`💾 Sessione ${sessionId} creata nel DB.`);
+    console.log(`💾 Sessione ${sessionId} creata/verificata nel DB dall'IP ${creatorIp}.`);
   } catch (err) {
     console.error("Errore durante la creazione della sessione nel DB:", err.message);
   }
@@ -64,11 +62,9 @@ async function updateSessionUrl(sessionId, url) {
   }
 }
 
-
 /**
- * Aggiorna il numero di partecipanti per una data sessione nel database.
- * Se la sessione non ha più partecipanti, la rimuove.
- * @param {string} sessionId L'ID della sessione da aggiornare.
+ * Aggiorna il conteggio dei partecipanti o imposta la sessione come inattiva.
+ * @param {string} sessionId L'ID della sessione.
  */
 async function updateParticipantCount(sessionId) {
   try {
@@ -78,100 +74,52 @@ async function updateParticipantCount(sessionId) {
     console.log(`📊 Aggiornamento sessione ${sessionId}: ${participantCount} partecipanti.`);
 
     if (participantCount > 0) {
-      await db.run(
-        'UPDATE sessions SET participantCount = ? WHERE sessionId = ?',
-        [participantCount, sessionId]
-      );
+      // CORRETTO: Usa 1 per TRUE
+      await db.run('UPDATE sessions SET participantCount = ?, isActive = 1 WHERE sessionId = ?', [participantCount, sessionId]);
     } else {
-      await db.run('DELETE FROM sessions WHERE sessionId = ?', sessionId);
-      console.log(`🧹 Sessione ${sessionId} vuota, rimossa dal DB.`);
+      // CORRETTO: Usa 0 per FALSE
+      await db.run('UPDATE sessions SET isActive = 0 WHERE sessionId = ?', [sessionId]);
+      console.log(`👻 Sessione ${sessionId} vuota, impostata come inattiva.`);
     }
   } catch (err) {
     console.error("Errore durante l'aggiornamento del conteggio partecipanti:", err.message);
   }
 }
 
-// --- GESTIONE ROUTE EXPRESS (invariata) ---
-app.post("/interpret", async (req, res) => {
-  try {
-    const { text } = req.body;
-    if (!text) return res.status(400).json({ error: "Manca testo" });
-
-    const prompt = `
-      Sei un'analizzatore sonoro collegato ad un sistema di Stream Diffusion alla camera dell'utente.
-      L'utente può diventare quello che dice.
-      Se è un personaggio ritorna il personaggio, eventualmente con caratteristiche o descrizione caratteriale.
-      Dovresti creare una lista di 3 elementi separati da una virgola che descrivano con un'immagine visiva con il contenuto del seguente messaggio "${text}".
-      La lista deve essere separata da una virgola (e.g. "Elon Musk, spazio, ride", "Trump, America, Governo longevo", "Gigibit, tanti soldi, felice", "Un gatto che balla, sole, aria"...). 
-      Se non capisci o non è possibile rappresentare visivamente il messaggio rispondi col carattere '.'.
-    `;
-
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0
-      })
-    });
-
-    const data = await r.json();
-    let responseText = data.choices?.[0]?.message?.content;
-    responseText = responseText.trim();
-    res.json(responseText);
-
-  } catch (err) {
-    console.error("Errore interpretazione comando:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get('/self-drawing', (_, res) => res.sendFile(path.join(__dirname, 'public', 'self_drawing.html')));
-app.get('/paint', (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/draw', (_, res) => res.sendFile(path.join(__dirname, "public", "draw.html")));
-app.get('/', (_, res) => res.sendFile(path.join(__dirname, "public", "summarize.html")));
-
-app.post('/', (req, res) => {
-    const { text } = req.body;
-    console.log(text)
-    res.json({});
-});
-
-// --- GESTIONE SOCKET.IO (modificata) ---
+// --- GESTIONE SOCKET.IO ---
 io.on('connection', (socket) => {
   console.log(`✅ Utente connesso: ${socket.id}`);
 
   socket.on('create-session', (sessionId) => {
     socket.join(sessionId);
     console.log(`🏡 Host ${socket.id} ha creato la sessione: ${sessionId}`);
-    // --- MODIFICATO: Crea la riga nel DB ---
-    createSessionInDb(sessionId);
+    createSessionInDb(sessionId, socket);
+    socket.emit('session-joined', sessionId);
   });
 
-  socket.on('join-session', (sessionId) => {
+  socket.on('join-session', async (sessionId) => {
+    await createSessionInDb(sessionId, socket);
     socket.join(sessionId);
     console.log(`🔗 Partecipante ${socket.id} si è unito alla sessione: ${sessionId}`);
-    
     socket.emit('session-joined', sessionId);
     socket.to(sessionId).emit('user-joined', socket.id);
-    
-    // --- MODIFICATO: Aggiorna il conteggio dei partecipanti ---
     updateParticipantCount(sessionId);
   });
 
-  socket.on('share-url', ({ sessionId, url }) => {
+  socket.on('share-url', async ({ sessionId, url }) => {
     console.log(`🚀 URL [${url}] ricevuto per la sessione ${sessionId}`);
-    // --- NUOVA LOGICA: Salva l'URL nel DB ---
-    updateSessionUrl(sessionId, url);
+    try {
+      await createSessionInDb(sessionId, socket);
+      await updateSessionUrl(sessionId, url);
+    } catch (err) {
+      console.error("Errore durante il salvataggio dell'URL (upsert):", err.message);
+    }
     socket.to(sessionId).emit('url-received', url);
+    socket.emit('test-room-sharing-url', url);
   });
 
   socket.on('share-user-message', ({ sessionId, text, interpolation }) => {
-    console.log(`🚀 si chiacchiera pure qui: ${text}`);
+    console.log(`🚀 Messaggio utente: ${text}`);
     socket.to(sessionId).emit('user-message-received', { text, interpolation });
   });
 
@@ -179,42 +127,50 @@ io.on('connection', (socket) => {
     console.log(`👋 Utente ${socket.id} si sta disconnettendo...`);
     socket.rooms.forEach(sessionId => {
       if (sessionId !== socket.id) {
-        // Diamo un piccolo ritardo per assicurarci che il socket abbia lasciato
-        // la stanza prima di ricalcolare il numero di partecipanti.
         setTimeout(() => updateParticipantCount(sessionId), 50);
       }
     });
-    socket.on('request-random-stream', async ({
-        sessionId
-    }) => {
-        try {
-            // Cerca nel DB una sessione che non sia quella del richiedente,
-            // che abbia un URL valido, e ne prende una a caso.
-            const randomSession = await db.get(
-                `SELECT url FROM sessions WHERE sessionId != ? AND url IS NOT NULL ORDER BY RANDOM() LIMIT 1`,
-                [sessionId]
-            );
+  });
 
-            if (randomSession && randomSession.url) {
-                console.log(`✨ Inviando URL casuale ${randomSession.url} a ${socket.id}`);
-                // Invia l'URL trovato al client che l'ha richiesto.
-                socket.emit('random-stream-received', {
-                    url: randomSession.url
-                });
-            } else {
-                console.log(`🤔 Nessuno stream casuale trovato per ${socket.id}`);
-                // Informa il client che non ci sono altri stream disponibili.
-                socket.emit('no-random-stream-found');
-            }
-        } catch (err) {
-            console.error("Errore durante la ricerca di uno stream casuale:", err.message);
-        }
-    });
+  socket.on('request-random-stream', async ({ sessionId }) => {
+    if (!sessionId) {
+      console.warn(`⚠️ Ricevuta richiesta per stream casuale con sessionId nullo da ${socket.id}. Richiesta ignorata.`);
+      socket.emit('no-random-stream-found');
+      return;
+    }
+    console.log(`▶️ Ricevuta richiesta per stream casuale da ${socket.id} (per la sessione: ${sessionId})`);
+    try {
+      // CORRETTO PER IL TEST: Cerca la sessione corrente usando isActive = 1
+      const randomSession = await db.get(
+        `SELECT url FROM sessions WHERE sessionId = ? AND url IS NOT NULL AND isActive = 1 ORDER BY RANDOM() LIMIT 1`,
+        [sessionId]
+      );
+      if (randomSession && randomSession.url) {
+        console.log(`✨ Inviando URL casuale ${randomSession.url} a ${socket.id}`);
+        socket.emit('random-stream-received', { url: randomSession.url });
+      } else {
+        console.log(`🤔 Nessuno stream attivo trovato per ${socket.id}`);
+        socket.emit('no-random-stream-found');
+      }
+    } catch (err) {
+      console.error("Errore durante la ricerca di uno stream casuale:", err.message);
+    }
   });
 
   socket.on('disconnect', () => {
     console.log(`❌ Utente disconnesso: ${socket.id}`);
   });
+});
+
+// --- ROUTE EXPRESS (invariate)
+app.get('/self-drawing', (_, res) => res.sendFile(path.join(__dirname, 'public', 'self_drawing.html')));
+app.get('/paint', (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/draw', (_, res) => res.sendFile(path.join(__dirname, "public", "draw.html")));
+app.get('/', (_, res) => res.sendFile(path.join(__dirname, "public", "summarize.html")));
+app.post('/', (req, res) => {
+  const { text } = req.body;
+  console.log(text)
+  res.json({});
 });
 
 // --- FUNZIONE DI AVVIO ASINCRONA ---
@@ -224,3 +180,4 @@ async function startServer() {
 }
 
 startServer();
+

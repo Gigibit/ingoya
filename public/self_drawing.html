@@ -55,14 +55,20 @@
                 style="display: none; width: 100%; height: 100%; position: absolute; top: 0; left: 0; object-fit: cover;"></video>
         </div>
     </div>
-
+    <div class="slide" id="random-stream-slide" style="display: none;">
+        <video class="playback-video" autoplay playsinline muted></video>
+        <div class="loader" style="display: block;">
+            <div class="spinner"></div>
+            <p>Caricamento stream...</p>
+        </div>
+    </div>
     <script>window.selfMode = true</script>
     <script>window.audioManaged = true</script>
     <script src="/socket.io/socket.io.js"></script>
-    <script type="text/javascript" src="dat.gui.min.js"></script>
-    <script type="text/javascript" src="webgl.js"></script>
+    <!-- <script type="text/javascript" src="dat.gui.min.js"></script>
+    <script type="text/javascript" src="webgl.js"></script> -->
     <script type="module" src="draw.js"></script>
-    <script type="module" src="interpreter.js"></script>
+    <!-- <script type="module" src="interpreter.js"></script> -->
 </body>
 
 </html>
