@@ -1,22 +1,35 @@
 const start = () => {
   const SpeechRecognition = (window.SpeechRecognition || window.webkitSpeechRecognition);
   if (!SpeechRecognition || !window.audioManaged) {
-    console.log("Il tuo browser non supporta SpeechRecognition, o non fu alcunché ch'io po' gestire");
+    console.log("Il tuo browser non supporta SpeechRecognition, o non ci sono le condizioni per gestirlo.");
     return;
   }
+  
   const recognition = new SpeechRecognition();
-  var recognizing = true
+  // --- MODIFICA: La variabile 'recognizing' ora controlla lo stato desiderato
+  let recognizing = false; // Partiamo da spento
+  let finalTranscript = "";
+
   recognition.lang = 'it-IT';
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
 
-  document.getElementById('mic-button').addEventListener('click', ()=>{
-      recognizing ? recognition.stop() : recognizing.start()
-      recognizing = !recognizing
-    }
-  )
+  const micButton = document.getElementById('mic-button');
+  if (micButton) {
+      micButton.addEventListener('click', () => {
+        // --- MODIFICA: Logica di toggle più robusta
+        if (recognizing) {
+          recognizing = false;
+          recognition.stop();
+          console.log("🎤 Riconoscimento fermato manualmente.");
+        } else {
+          recognizing = true;
+          recognition.start();
+          console.log("🎤 Riconoscimento avviato manualmente.");
+        }
+      });
+  }
 
-  let finalTranscript = "";
 
   const onSentenceComplete = async (userMessage) => {
     console.log("🎯 Frase completa:", userMessage);
@@ -29,7 +42,7 @@ const start = () => {
       });
 
       const text = await res.text();
-      if(text.length > 2) popWords(text);
+      if (text.length > 2) popWords(text);
 
       const userMessageInterpolationEvent = new CustomEvent("usermessageinterpolation", {
         detail: {
@@ -37,7 +50,7 @@ const start = () => {
           interpolation: text
         }
       });
-      document.dispatchEvent(userMessageInterpolationEvent)
+      document.dispatchEvent(userMessageInterpolationEvent);
 
     } catch (err) {
       console.log("❌ Errore fetch /interpret:", err);
@@ -51,12 +64,11 @@ const start = () => {
       if (event.results[i].isFinal) {
         finalTranscript += transcript + " ";
         onSentenceComplete(transcript.trim());
-        finalTranscript = ''
+        finalTranscript = '';
       } else {
         interimTranscript += transcript;
       }
     }
-
   };
 
   recognition.onerror = (event) => {
@@ -64,19 +76,28 @@ const start = () => {
   };
 
   recognition.onend = () => {
-    console.log("Riconoscimento terminato. Riparto automaticamente...");
-    recognition.start();
+    // --- MODIFICA CHIAVE: Riavvia solo se l'utente non lo ha spento
+    if (recognizing) {
+      console.log("Riconoscimento terminato (timeout/naturale). Riparto automaticamente...");
+      recognition.start();
+    } else {
+      console.log("Riconoscimento terminato e lasciato spento.");
+    }
   };
-
+  
+  // Non avviamo più in automatico, ma aspettiamo il click dell'utente.
+  // Se vuoi che parta da solo, decommenta le due righe sotto:
+  recognizing = true;
   recognition.start();
-  console.log("🎤 Riconoscimento avviato...");
+  // console.log("🎤 Riconoscimento avviato...");
+
 
   function popWords(text) {
     const words = (text).split(",");
     words.forEach((w, i) => {
-      setTimeout(() => popWord(w.replaceAll('"', '')), i * 300); // effetto scaglionato
+      setTimeout(() => popWord(w.replaceAll(i/'"|\\'/g, '')), i * 300); // effetto scaglionato
     });
-    recognition.stop()
+    // --- MODIFICA: RIMOSSO recognition.stop() per evitare il loop infinito
   }
 
   function popWord(word) {
@@ -84,11 +105,9 @@ const start = () => {
     span.textContent = word;
     span.className = "word-pop";
 
-    // Dimensione random gigante (tra 5vw e 12vw)
     const fontSize = Math.random() * 7 + 5;
     span.style.fontSize = fontSize + "vw";
 
-    // Posizione random rispetto allo schermo
     const x = Math.random() * (window.innerWidth - 200);
     const y = Math.random() * (window.innerHeight - 200);
     span.style.left = `${x}px`;
@@ -96,22 +115,19 @@ const start = () => {
 
     document.body.appendChild(span);
 
-    // fade-in devastante
     requestAnimationFrame(() => span.classList.add("show"));
 
-    // fade-out dopo 2-3s
     setTimeout(() => {
       span.classList.remove("show");
       span.classList.add("fadeout");
     }, 2000 + Math.random() * 1000);
 
-    // rimuovi dal DOM
     setTimeout(() => {
       span.remove();
     }, 4000);
   }
 
-  document.addEventListener('popwords', (e) => popWords(e.detail))
-
+  document.addEventListener('popwords', (e) => popWords(e.detail));
 };
+
 window.addEventListener('load', start);

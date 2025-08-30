@@ -8,10 +8,6 @@ import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import multer from 'multer';
-import fs from 'fs';
-import OpenAI from 'openai';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { setupDatabase } from './database.js';
 
 // --- SETUP INIZIALE ---
@@ -187,6 +183,32 @@ io.on('connection', (socket) => {
         // la stanza prima di ricalcolare il numero di partecipanti.
         setTimeout(() => updateParticipantCount(sessionId), 50);
       }
+    });
+    socket.on('request-random-stream', async ({
+        sessionId
+    }) => {
+        try {
+            // Cerca nel DB una sessione che non sia quella del richiedente,
+            // che abbia un URL valido, e ne prende una a caso.
+            const randomSession = await db.get(
+                `SELECT url FROM sessions WHERE sessionId != ? AND url IS NOT NULL ORDER BY RANDOM() LIMIT 1`,
+                [sessionId]
+            );
+
+            if (randomSession && randomSession.url) {
+                console.log(`✨ Inviando URL casuale ${randomSession.url} a ${socket.id}`);
+                // Invia l'URL trovato al client che l'ha richiesto.
+                socket.emit('random-stream-received', {
+                    url: randomSession.url
+                });
+            } else {
+                console.log(`🤔 Nessuno stream casuale trovato per ${socket.id}`);
+                // Informa il client che non ci sono altri stream disponibili.
+                socket.emit('no-random-stream-found');
+            }
+        } catch (err) {
+            console.error("Errore durante la ricerca di uno stream casuale:", err.message);
+        }
     });
   });
 

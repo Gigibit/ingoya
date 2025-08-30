@@ -1,294 +1,334 @@
-        .dg {
-            display: none
+    /* ================================================================== */
+    /* NUOVO TEMA: ELEGANTE, MINIMALE, LIGHT */
+    /* ================================================================== */
+
+    :root {
+        /* Nuova Palette Colori */
+        --background-color: #F4F4F9;
+        /* Un grigio chiarissimo con una punta di viola */
+        --container-bg: #FFFFFF;
+        --accent-color: #6366F1;
+        /* Indaco, per un tocco artistico e moderno */
+        --text-color: #2D3748;
+        /* Grigio ardesia, più morbido del nero puro */
+        --border-color: #E2E8F0;
+        /* Bordo grigio chiaro e sottile */
+
+        /* Tipografia e Stili */
+        --border-radius: 12px;
+        /* Un raggio leggermente più stretto e moderno */
+        --font-family-sans: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+        /* Ombreggiature per la profondità */
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Stili Globali */
+    body {
+        margin: 0;
+        overflow: hidden;
+        background-color: var(--background-color);
+        color: var(--text-color);
+        font-family: var(--font-family-sans);
+        /* Usa il nuovo font */
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+        padding: 1.5rem;
+        gap: 1.5rem;
+        box-sizing: border-box;
+    }
+
+    .dg {
+        display: none;
+    }
+
+    video::-webkit-media-controls {
+        display: none;
+    }
+
+    /* Contenitore Video Principale */
+    #video-container {
+        position: relative;
+        width: 100%;
+        flex-grow: 1;
+        min-height: 0;
+        background-color: #000;
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow-md);
+        /* Aggiunge ombra */
+        overflow: hidden;
+        /* Nasconde angoli del video */
+    }
+
+    #playback-video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    /* Sezione Controlli */
+    #controls-section {
+        flex-shrink: 0;
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
+        gap: 1.5rem;
+    }
+
+    .prompt-wrapper {
+        flex-grow: 1;
+        max-width: 600px;
+    }
+
+    /* Canvas per il disegno (se usato) */
+    #canvas-container {
+        width: 100%;
+        height: 90px;
+        padding: 3px;
+        box-sizing: border-box;
+        border: 1px solid var(--border-color);
+        /* Bordo più sottile */
+        border-radius: var(--border-radius);
+        background-color: var(--container-bg);
+        box-shadow: var(--shadow-sm);
+    }
+
+    #fluidCanvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        border-radius: 8px;
+    }
+
+    /* Barra del Prompt */
+    .prompt-container {
+        display: flex;
+        align-items: center;
+        background-color: var(--container-bg);
+        border-radius: 45px;
+        /* Mantiene la forma a pillola */
+        height: 90px;
+        box-sizing: border-box;
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        /* Bordo sottile */
+        box-shadow: var(--shadow-md);
+        transition: box-shadow 0.2s ease-in-out;
+    }
+
+    .prompt-container:focus-within {
+        box-shadow: var(--shadow-lg), 0 0 0 2px var(--accent-color);
+        /* Effetto focus */
+    }
+
+    .prompt-container input[type=text] {
+        flex-grow: 1;
+        border: none;
+        background: transparent;
+        padding: .5rem 1rem;
+        font-size: 1.1rem;
+        font-family: var(--font-family-sans);
+        outline: none;
+        color: var(--text-color);
+    }
+
+    /* Bottoni */
+    .prompt-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 50px;
+        height: 50px;
+        padding: 0;
+        border-radius: 50%;
+        transition: all .2s ease;
+        cursor: pointer;
+        border: 1px solid var(--border-color);
+        /* Bordo sottile */
+        background-color: #FFFFFF;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .prompt-button:hover:not(:disabled) {
+        transform: scale(1.1);
+        box-shadow: var(--shadow-md);
+        border-color: var(--accent-color);
+    }
+
+    .prompt-button:active:not(:disabled) {
+        transform: scale(1.0);
+    }
+
+    /* Bottone Principale (invio) */
+    #update-params-btn {
+        background: var(--accent-color);
+        color: white;
+        font-size: 1.5rem;
+        border: none;
+    }
+
+    #update-params-btn:disabled {
+        background: #D1D5DB;
+        /* Grigio per disabilitato */
+        border-color: #9CA3AF;
+        cursor: not-allowed;
+        transform: scale(1);
+        box-shadow: none;
+    }
+
+    /* Bottone Camera/Icone */
+    #camera-button {
+        margin-right: 8px;
+    }
+
+    #camera-button svg {
+        width: 24px;
+        height: 24px;
+        fill: var(--text-color);
+        transition: fill 0.2s ease;
+    }
+
+    #camera-button:hover svg {
+        fill: var(--accent-color);
+    }
+
+
+    /* ================================================================== */
+    /* STATO 2: VISTA SLIDER (Stili che si attivano con lo scroll) */
+    /* ================================================================== */
+    body.slider-view-active {
+        display: block !important;
+        overflow: hidden !important;
+        padding: 0 !important;
+        gap: 0 !important;
+        background-color: #000 !important;
+    }
+
+    .slider-view-active #slider-wrapper {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        overflow-y: scroll;
+        scroll-snap-type: y mandatory;
+        -webkit-overflow-scrolling: touch;
+        cursor: grab;
+    }
+
+    .slider-view-active .slide {
+        width: 100vw;
+        height: 100vh;
+        scroll-snap-align: start;
+        position: relative;
+        background-color: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .slider-view-active #video-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        flex-grow: unset;
+        min-height: unset;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .slider-view-active #playback-video {
+        object-fit: cover;
+    }
+
+    .slider-view-active #controls-section {
+        position: fixed;
+        z-index: 10;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 90%;
+        max-width: 600px;
+        pointer-events: none;
+    }
+
+    .slider-view-active #controls-section>* {
+        pointer-events: auto;
+    }
+
+    .slider-view-active .prompt-wrapper {
+        pointer-events: auto;
+    }
+
+    /* Classe per la transizione in dissolvenza (fade) */
+    .is-transitioning {
+        opacity: 0 !important;
+        transition: opacity 0.4s ease-in-out;
+    }
+
+    /* Loader e altri stili rimangono invariati... */
+    #loader {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        font-family: sans-serif;
+        z-index: 10;
+    }
+
+    .spinner {
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top: 4px solid #fff;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin-bottom: 10px;
+    }
+
+    @keyframes spin {
+        0% {
+            transform: rotate(0deg);
         }
 
-        video::-webkit-media-controls {
-            display: none
+        100% {
+            transform: rotate(360deg);
         }
+    }
 
-        :root {
-            --background-color: #fffacd;
-            --container-bg: #ffffff;
-            --primary-color: #ffffff;
-            --accent-color: #d4c68a;
-            --text-color: #1c1c1e;
-            --border-color: #1c1c1e;
-            --border-radius: 16px;
-            --font-family: 'Fredoka One', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            --shadow-color: #1c1c1e;
-        }
+    .word-pop {
+        position: fixed;
+        /* sopra a tutto, anche fuori dal video */
+        z-index: 9999;
+        font-family: 'Fredoka One', sans-serif;
+        font-weight: 400;
+        color: #fff;
+        text-shadow: 0 0 40px rgba(0, 0, 0, 0.9), 0 0 80px rgba(255, 255, 255, 0.6);
+        opacity: 0;
+        transform: scale(0.5) rotate(-10deg);
+        pointer-events: none;
+        white-space: nowrap;
+        transition: opacity 0.6s ease, transform 1s cubic-bezier(0.22, 1, 0.36, 1);
+    }
 
-        body {
-            margin: 0;
-            overflow: hidden;
-            /* Manteniamo questo per evitare lo scroll accidentale del layout flex */
-            background-color: var(--background-color);
-            color: var(--text-color);
-            font-family: var(--font-family);
-            display: flex;
-            flex-direction: column;
-            height: 100dvh;
-            /* ✨ USA L'ALTEZZA DINAMICA PER I DISPOSITIVI MOBILI ✨ */
-            padding: 1.5rem;
-            gap: 1.5rem;
-            box-sizing: border-box;
-        }
+    .word-pop.show {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+    }
 
-        #video-section {
-            flex-grow: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 0;
-        }
-
-        #video-iframe {
-            width: 100%;
-            height: 100%;
-            max-width: 1280px;
-            aspect-ratio: 16 / 9;
-            border: 3px solid var(--border-color);
-            border-radius: var(--border-radius);
-            background-color: #eee;
-        }
-
-        #controls-section {
-            flex-shrink: 0;
-            display: flex;
-            justify-content: center;
-            align-items: flex-end;
-            gap: 1.5rem;
-        }
-
-        .prompt-wrapper {
-            flex-grow: 1;
-            max-width: 600px;
-        }
-
-        #canvas-container {
-            width: 100%;
-            height: 90px;
-            padding: 3px;
-            box-sizing: border-box;
-            border: 3px solid var(--border-color);
-            border-radius: var(--border-radius);
-            background-color: var(--container-bg);
-
-        }
-
-        #fluidCanvas {
-            width: 100%;
-            height: 100%;
-            display: block;
-            border-radius: 8px;
-        }
-
-        .prompt-container {
-            display: flex;
-            align-items: center;
-            background-color: var(--primary-color);
-            border-radius: 45px;
-            height: 90px;
-            box-sizing: border-box;
-            padding: 12px;
-            border: 3px solid var(--border-color);
-        }
-
-        .prompt-container input[type=text] {
-            flex-grow: 1;
-            border: none;
-            background: transparent;
-            padding: .5rem 1rem;
-            font-size: 1.1rem;
-            font-family: 'Nunito', sans-serif;
-            outline: none;
-            color: var(--text-color);
-        }
-
-        .prompt-button {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 50px;
-            height: 50px;
-            padding: 0;
-            border-radius: 50%;
-            transition: transform .1s ease;
-            cursor: pointer;
-            border: 3px solid var(--border-color);
-        }
-
-        .prompt-button:hover:not(:disabled) {
-            transform: scale(1.1);
-        }
-
-        .prompt-button:active:not(:disabled) {
-            transform: scale(1.0);
-        }
-
-        #update-params-btn {
-            background: var(--accent-color);
-            color: white;
-            font-size: 1.5rem;
-        }
-
-        #update-params-btn:disabled {
-            background: #ccc;
-            border-color: #999;
-            cursor: not-allowed;
-        }
-
-        #mic-button {
-            background: #f8f8f8;
-            margin-right: 8px;
-        }
-
-        #mic-button svg {
-            width: 24px;
-            height: 24px;
-            fill: var(--text-color);
-        }
-
-        #mic-button:hover svg {
-            fill: var(--accent-color);
-        }
-
-        @media (max-width: 768px) {
-            body {
-                padding: 1rem;
-                gap: 1rem;
-            }
-
-            #controls-section {
-                flex-direction: column;
-                align-items: center;
-                gap: 1rem;
-            }
-
-            .prompt-wrapper {
-                width: 100%;
-                max-width: 100%;
-            }
-
-            #canvas-container {
-                width: 100%;
-                height: 120px;
-            }
-
-            .prompt-container input[type=text] {
-                font-size: 1rem;
-            }
-        }
-
-        #video-container {
-            position: relative;
-            /* Necessario per posizionare il loader all'interno */
-            width: 100%;
-            height: 80%;
-            margin: 0 auto;
-            background-color: black;
-        }
-
-        #playback-video {
-            width: 100%;
-            height: 100%;
-        }
-
-        #loader {
-            position: absolute;
-            /* Sovrapponi al video */
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            font-family: sans-serif;
-            z-index: 10;
-        }
-
-        .spinner {
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top: 4px solid #fff;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin-bottom: 10px;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        /* Classe per nascondere/mostrare il loader */
-        .hidden {
-            visibility: hidden;
-        }
-
-        #popup {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.6);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-
-        #popupContent {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            max-width: 300px;
-            text-align: center;
-        }
-
-        button#accept {
-            background: #4CAF50;
-            color: white;
-        }
-
-        button#decline {
-            background: #f44336;
-            color: white;
-        }
-
-        .word-pop {
-  position: fixed; /* sopra a tutto, anche fuori dal video */
-  z-index: 9999;
-  font-family: 'Fredoka One', sans-serif;
-  font-weight: 400;
-  color: #fff;
-  text-shadow: 0 0 40px rgba(0,0,0,0.9), 0 0 80px rgba(255,255,255,0.6);
-  opacity: 0;
-  transform: scale(0.5) rotate(-10deg);
-  pointer-events: none;
-  white-space: nowrap;
-  transition: opacity 0.6s ease, transform 1s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.word-pop.show {
-  opacity: 1;
-  transform: scale(1) rotate(0deg);
-}
-
-.word-pop.fadeout {
-  opacity: 0;
-  transform: scale(1.3) rotate(10deg);
-  transition: opacity 1.2s ease, transform 1.2s ease;
-}
+    .word-pop.fadeout {
+        opacity: 0;
+        transform: scale(1.3) rotate(10deg);
+        transition: opacity 1.2s ease, transform 1.2s ease;
+    }
