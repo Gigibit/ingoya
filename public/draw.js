@@ -11,16 +11,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // --- VARIABILI GLOBALI ---
     let socket = null;
-    const TEST = true
+    let touchStartY = 0;
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('sessionId') || generateSessionId();
     let isSliderViewActive = false;
     let canExplore = false;
     let isTransitioning = false; // Flag per evitare transizioni multiple
-    const pollIntervals = new Map(); // Mappa per gli intervalli di polling [url -> intervallo]
-    const BASE_POLL_INTERVAL = 5000;
-    const MAX_POLL_INTERVAL = 30000;
-
 
     // --- RIFERIMENTI AGLI ELEMENTI DEL DOM ---
     const originalPlaybackVideo = document.getElementById('playback-video');
@@ -43,61 +39,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // --- FUNZIONI PRINCIPALI ---
 
-    /**
-     * Inietta gli stili CSS necessari per la nuova transizione in dissolvenza.
-     */
-    function injectTransitionStyles() {
-        const style = document.createElement('style');
-        style.textContent = `
-            body.slider-view-active {
-                display: block; /* <-- CORREZIONE: Risolve il conflitto di layout */
-                padding: 0;
-                overflow: hidden;
-                background-color: #000;
-            }
-            #stream-container {
-                position: fixed;
-                top: 0; left: 0;
-                width: 100vw;
-                height: 100vh;
-            }
-            .slide {
-                position: absolute;
-                top: 0; left: 0;
-                width: 100%;
-                height: 100%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                background-color: #000;
-                opacity: 0;
-                transition: opacity 0.7s ease-in-out;
-                pointer-events: none;
-            }
-            .slide.is-visible {
-                opacity: 1;
-                pointer-events: auto;
-                z-index: 1;
-            }
-            .slide .playback-video {
-                width: 100%;
-                height: 100%;
-                object-fit: contain;
-            }
-            .slide .loader {
-                position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-                background-color: rgba(0, 0, 0, 0.7); display: flex; flex-direction: column;
-                justify-content: center; align-items: center; color: white; z-index: 10;
-            }
-            .slide .loader .spinner {
-                border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%;
-                border-top: 4px solid #fff; width: 40px; height: 40px;
-                animation: spin 1s linear infinite; margin-bottom: 10px;
-            }
-            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        `;
-        document.head.appendChild(style);
-    }
 
     /**
      * Chiede al server un nuovo stream per il precaricamento.
@@ -106,7 +47,26 @@ window.addEventListener('DOMContentLoaded', () => {
         console.log("🔌 Richiesta per precaricamento N+1...");
         if (socket) socket.emit('request-random-stream', { sessionId });
     }
-    
+    function removeSmooth(element, duration=600) {
+        // 1. Applica la classe che fa partire la dissolvenza
+const start = performance.now();
+
+    function step(timestamp) {
+        let progress = (timestamp - start) / duration;
+        if (progress > 1) progress = 1;
+
+        element.style.opacity = String(1 - progress);
+        element.style.transform = `scale(${1 - 0.05 * progress})`;
+
+        if (progress < 1) {
+            requestAnimationFrame(step);
+        } else {
+            element.remove();
+        }
+    }
+
+    requestAnimationFrame(step);
+    }
     /**
      * Gestisce la transizione al video successivo.
      */
@@ -128,10 +88,12 @@ window.addEventListener('DOMContentLoaded', () => {
         nextSlide.classList.add('is-visible');
 
         nextSlide.addEventListener('transitionend', () => {
-            currentSlide.remove();
-            nextSlide.style.zIndex = '1';
-            preloadNextStream();
-            isTransitioning = false;
+            removeSmooth(currentSlide)
+            setTimeout(()=>{
+                nextSlide.style.zIndex = '1';
+                preloadNextStream();
+                isTransitioning = false;
+            },400)
         }, { once: true });
     }
 
@@ -143,38 +105,52 @@ window.addEventListener('DOMContentLoaded', () => {
         isSliderViewActive = true;
         console.log("🚀 Transizione in vista principale...");
 
-        // 1. Applica la classe al body per attivare i nuovi stili
         document.body.classList.add('slider-view-active');
-        
-        // 2. Prepara il nuovo contenitore
+
+        // 1. Crea contenitore per gli stream
         const streamContainer = document.createElement('div');
         streamContainer.id = 'stream-container';
 
-        // 3. Prendi lo slide GIÀ precaricato e rendilo visibile
+        // 2. Slide precaricato
         const preloadedSlide = document.getElementById('random-stream-slide');
         preloadedSlide.classList.add('is-visible');
         streamContainer.appendChild(preloadedSlide);
 
-        // 4. Sostituisci il contenuto del body con il nuovo contenitore
-        document.body.innerHTML = '';
+        // 3. Mantieni tutto il resto del body intatto, aggiungi solo lo stream container
         document.body.appendChild(streamContainer);
 
-        // 5. Avvia il precaricamento del prossimo video (N+1)
+        // 4. Rendi playback-video un quadratino in overlay (come nelle videocall)
+        originalPlaybackVideo.classList.add('mini-video');
+        document.getElementById('controls-section').style.display = 'none'
+        document.body.appendChild(originalPlaybackVideo);
+
+        // 5. Avvia precaricamento prossimo video
         preloadNextStream();
 
-        // 6. Abilita lo scroll per le transizioni future
-        console.log("✅ Transizione iniziale completata. Scroll per i prossimi video abilitato.");
+        // 6. Scroll -> cambia stream
         window.addEventListener('wheel', (event) => {
             if (event.deltaY > 0) {
                 transitionToNextStream();
             }
         }, { passive: false });
+        window.addEventListener('touchstart', (e) => {
+            touchStartY = e.changedTouches[0].screenY;
+        }, { passive: false });
+
+        window.addEventListener('touchend', (e) => {
+            const touchEndY = e.changedTouches[0].screenY;
+            // Se lo swipe è verso l'alto (come uno scroll verso il basso) e di almeno 50px
+            if (touchStartY - touchEndY > 50) {
+                transitionToNextStream();
+            }
+        }, { passive: false });
     }
+
 
     function handleInitialScroll(event) {
         if (canExplore && !isSliderViewActive && event.deltaY > 0) {
             event.preventDefault();
-            window.removeEventListener('wheel', handleInitialScroll, { passive : false });
+            window.removeEventListener('wheel', handleInitialScroll, { passive: false });
             switchToSliderView();
         }
     }
@@ -183,14 +159,28 @@ window.addEventListener('DOMContentLoaded', () => {
         if (canExplore) return;
         console.log("🌟 Modalità esplorazione abilitata. Scorri per iniziare.");
         canExplore = true;
-        window.addEventListener('wheel', handleInitialScroll, { passive : false });
+        window.addEventListener('wheel', handleInitialScroll, { passive: false });
+        const handleInitialTouch = (e) => {
+            const touchEndY = e.changedTouches[0].screenY;
+            // Se lo swipe è verso l'alto e l'esplorazione è attiva
+            if (canExplore && !isSliderViewActive && (touchStartY - touchEndY > 50)) {
+                e.preventDefault();
+                // Rimuovi i listener iniziali per evitare attivazioni multiple
+                window.removeEventListener('wheel', handleInitialScroll, { passive: false });
+                window.removeEventListener('touchstart', handleInitialTouchStart);
+                window.removeEventListener('touchend', handleInitialTouch);
+                switchToSliderView();
+            }
+        };
+
+        const handleInitialTouchStart = (e) => {
+            touchStartY = e.changedTouches[0].screenY;
+        };
+
+        window.addEventListener('touchstart', handleInitialTouchStart, { passive: false });
+        window.addEventListener('touchend', handleInitialTouch, { passive: false });
     }
 
-    /**
-     * MODIFICATO: Gestisce la connessione WHEP e la logica di polling usando una Map.
-     * @param {HTMLElement} targetVideoElement L'elemento video a cui collegare lo stream.
-     * @param {string} whepUrl L'URL del WHEP endpoint.
-     */
     async function handleStartPlayback(targetVideoElement, whepUrl) {
         if (!targetVideoElement || !whepUrl) {
             console.error("handleStartPlayback chiamato con argomenti non validi.");
@@ -199,23 +189,9 @@ window.addEventListener('DOMContentLoaded', () => {
         if (targetVideoElement.reconnectTimeoutId) clearTimeout(targetVideoElement.reconnectTimeoutId);
         if (targetVideoElement.peerConnection) targetVideoElement.peerConnection.close();
 
-        // Inizializza l'intervallo per questo URL se non esiste
-        if (!pollIntervals.has(whepUrl)) {
-            pollIntervals.set(whepUrl, BASE_POLL_INTERVAL);
-        }
-
-        async function tryToConnect() {
+        async function tryToConnect(pollInterval) {
             try {
-                const currentInterval = pollIntervals.get(whepUrl);
-
-                // Pianifica il prossimo tentativo di riconnessione
-                targetVideoElement.reconnectTimeoutId = setTimeout(() => {
-                    // Calcola e imposta il prossimo intervallo prima della chiamata ricorsiva
-                    const nextInterval = Math.min(currentInterval + 2000, MAX_POLL_INTERVAL);
-                    pollIntervals.set(whepUrl, nextInterval);
-                    tryToConnect();
-                }, currentInterval);
-                
+                targetVideoElement.reconnectTimeoutId = setTimeout(() => tryToConnect(Math.min(pollInterval + 2000, 30000)), pollInterval);
                 const playbackPeerConnection = new RTCPeerConnection();
                 targetVideoElement.peerConnection = playbackPeerConnection;
 
@@ -224,10 +200,6 @@ window.addEventListener('DOMContentLoaded', () => {
                     const loader = targetVideoElement.parentElement.querySelector('.loader');
                     if (loader) loader.style.display = 'none';
                     if (targetVideoElement.srcObject !== event.streams[0]) targetVideoElement.srcObject = event.streams[0];
-                    
-                    // Resetta l'intervallo di polling per questo URL in caso di successo
-                    pollIntervals.set(whepUrl, BASE_POLL_INTERVAL);
-                    
                     if (targetVideoElement.id === 'playback-video') {
                         enableExploreMode();
                     }
@@ -243,13 +215,11 @@ window.addEventListener('DOMContentLoaded', () => {
                 if (!whepResponse.ok) throw new Error(`Connessione WHEP fallita: ${whepResponse.statusText}`);
                 const answerSdp = await whepResponse.text();
                 await playbackPeerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
-
             } catch (error) {
-                const currentInterval = pollIntervals.get(whepUrl);
-                console.error(`Tentativo di connessione fallito per ${whepUrl}. Prossimo tentativo tra ${currentInterval || BASE_POLL_INTERVAL}ms`);
+                console.error(`Tentativo di connessione fallito per ${whepUrl}. Prossimo tentativo tra ${pollInterval}ms`);
             }
         }
-        tryToConnect();
+        tryToConnect(5000);
     }
 
     async function startLivepeerStream(sourceStream) {
@@ -275,7 +245,7 @@ window.addEventListener('DOMContentLoaded', () => {
             console.log(`Connessione WHIP stabilita con successo! ✔️ ${whepUrl}`);
             setTimeout(() => {
                 handleStartPlayback(originalPlaybackVideo, whepUrl);
-                
+
                 socket.emit('share-url', { sessionId: sessionId, url: whepUrl }, () => {
                     console.log('✅ Server ha confermato URL. Avvio precaricamento primo stream.');
                     preloadNextStream();
@@ -287,11 +257,11 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function handleUpdateParams() {
+    async function handleUpdateParams(prompt) {
         if (!streamId) return;
         updateBtn.disabled = true;
         try {
-            const paramsPayload = { "params": { "prompt": promptInput.value } };
+            const paramsPayload = { "params": { "prompt": prompt || promptInput.value } };
             const response = await fetch(`${API_BASE_URL}/v1/streams/${streamId}`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${API_KEY}`, 'x-client-source': 'streamdiffusion-web', 'Content-Type': 'application/json' }, body: JSON.stringify(paramsPayload) });
             if (!response.ok) throw new Error(`API Update Error: ${response.statusText}`);
             promptInput.value = '';
@@ -323,8 +293,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // --- INIZIALIZZAZIONE ---
     function init() {
-        injectTransitionStyles(); // Aggiunge i nuovi stili per la dissolvenza
-
         const preloadedVideoElement = document.querySelector('#random-stream-slide .playback-video');
         if (!preloadedVideoElement) {
             return console.error("FATAL: L'elemento #random-stream-slide non è stato trovato nell'HTML.");
@@ -338,7 +306,7 @@ window.addEventListener('DOMContentLoaded', () => {
             window.history.replaceState({ path: newUrl }, '', newUrl);
             socket.emit('join-session', sessionId);
         });
-       
+
         socket.on('random-stream-received', ({ url }) => {
             console.log(`🎥 URL ricevuto: ${url}`);
             const streamContainer = document.getElementById('stream-container');
@@ -367,8 +335,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
         document.addEventListener('usermessageinterpolation', (e) => {
             if (socket) socket.emit('share-user-message', { sessionId, text: e.detail.text, interpolation: e.detail.interpolation });
-            promptInput.value = e.detail.interpolation;
-            updateBtn.click();
+            console.log('Updating with', e.detail.interpolation)
+            handleUpdateParams(e.detail.interpolation)
         });
 
         setTimeout(() => {

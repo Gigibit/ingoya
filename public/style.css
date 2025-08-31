@@ -63,11 +63,7 @@
         /* Nasconde angoli del video */
     }
 
-    #playback-video {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-    }
+   
 
     /* Sezione Controlli */
     #controls-section {
@@ -157,11 +153,13 @@
         box-shadow: var(--shadow-md);
         border-color: var(--accent-color);
     }
-    #camera-button.camera-enabled{
+
+    #camera-button.camera-enabled {
         transform: scale(1.1);
         box-shadow: var(--shadow-md);
         border-color: var(--accent-color);
     }
+
     #camera-button:hover svg,
     #camera-button.camera-enabled svg {
         fill: var(--accent-color);
@@ -203,6 +201,40 @@
     #camera-button:hover svg {
         fill: var(--accent-color);
     }
+
+
+    #playback-video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        /* transizione morbida */
+    }
+
+    #playback-video.mini-video {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 220px;
+        height: 124px;
+        border-radius: 12px;
+        background: black;
+        object-fit: cover;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+        z-index: 9999;
+    }
+ #playback-video.mini-video {
+    transform: scale(0.9);
+    opacity: 0.9;
+    animation: pip-pop 0.5s ease forwards;
+}
+
+@keyframes pip-pop {
+    from { transform: scale(0.8); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+
 
     /* Loader e altri stili rimangono invariati... */
     #loader {
@@ -266,3 +298,67 @@
         transform: scale(1.3) rotate(10deg);
         transition: opacity 1.2s ease, transform 1.2s ease;
     }
+
+
+            body.slider-view-active {
+                display: block; /* <-- CORREZIONE: Risolve il conflitto di layout */
+                padding: 0;
+                overflow: hidden;
+                background-color: #000;
+            }
+            #stream-container {
+                position: fixed;
+                top: 0; left: 0;
+                width: 100vw;
+                height: 100vh;
+            }
+            .slide {
+                position: absolute;
+                top: 0; left: 0;
+                width: 100%;
+                height: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background-color: var(--background-color);
+                opacity: 0;
+                transition: opacity 0.7s ease-in-out;
+                pointer-events: none;
+            }
+            .slide.is-visible {
+                opacity: 1;
+                pointer-events: auto;
+                z-index: 1;
+            }
+            .slide .playback-video {
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+            }
+            .slide .loader {
+                position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+                background-color: rgba(0, 0, 0, 0.7); display: flex; flex-direction: column;
+                justify-content: center; align-items: center; color: white; z-index: 10;
+            }
+            .slide .loader .spinner {
+                border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%;
+                border-top: 4px solid #fff; width: 40px; height: 40px;
+                animation: spin 1s linear infinite; margin-bottom: 10px;
+            }
+            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+
+            .slide {
+    transform: scale(0.95);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.slide.is-visible {
+    transform: translateZ(0) scale(1);
+    opacity: 1;
+}
+
+.slide.is-leaving {
+    transform: translateZ(-50px) scale(0);
+    opacity: 0;
+}

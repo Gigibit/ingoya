@@ -1,62 +1,41 @@
 const start = () => {
   const SpeechRecognition = (window.SpeechRecognition || window.webkitSpeechRecognition);
   if (!SpeechRecognition || !window.audioManaged) {
-    console.log("Il tuo browser non supporta SpeechRecognition, o non ci sono le condizioni per gestirlo.");
+    console.log("❌ Il tuo browser non supporta SpeechRecognition, o non ci sono le condizioni per gestirlo.");
     return;
   }
-  
+
   const recognition = new SpeechRecognition();
-  // --- MODIFICA: La variabile 'recognizing' ora controlla lo stato desiderato
-  let recognizing = false; // Partiamo da spento
+
+  // --- Stati ---
+  let recognizing = false;    // volontà dell’utente
+  let isRecognizing = false;  // stato reale
   let finalTranscript = "";
 
+  // --- Config ---
   recognition.lang = 'it-IT';
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
 
+  // --- Pulsante microfono ---
   const micButton = document.getElementById('mic-button');
   if (micButton) {
-      micButton.addEventListener('click', () => {
-        // --- MODIFICA: Logica di toggle più robusta
-        if (recognizing) {
-          recognizing = false;
-          recognition.stop();
-          console.log("🎤 Riconoscimento fermato manualmente.");
-        } else {
-          recognizing = true;
+    micButton.addEventListener('click', () => {
+      if (recognizing) {
+        recognizing = false;
+        recognition.stop();
+        console.log("🛑 Riconoscimento fermato manualmente.");
+      } else {
+        recognizing = true;
+        if (!isRecognizing) {
           recognition.start();
           console.log("🎤 Riconoscimento avviato manualmente.");
         }
-      });
+      }
+    });
   }
 
-
-  const onSentenceComplete = async (userMessage) => {
-    console.log("🎯 Frase completa:", userMessage);
-
-    try {
-      const res = await fetch("/interpret", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: userMessage })
-      });
-
-      const text = await res.text();
-      if (text.length > 2) popWords(text);
-
-      const userMessageInterpolationEvent = new CustomEvent("usermessageinterpolation", {
-        detail: {
-          text: userMessage,
-          interpolation: text
-        }
-      });
-      document.dispatchEvent(userMessageInterpolationEvent);
-
-    } catch (err) {
-      console.log("❌ Errore fetch /interpret:", err);
-    }
-  };
-
+  // --- Gestione risultati ---
   recognition.onresult = (event) => {
     let interimTranscript = "";
     for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -71,33 +50,64 @@ const start = () => {
     }
   };
 
-  recognition.onerror = (event) => {
-    console.error("Errore riconoscimento vocale:", event.error);
+  // --- Eventi di stato ---
+  recognition.onstart = () => {
+    isRecognizing = true;
+    console.log("▶️ Riconoscimento attivo...");
   };
 
   recognition.onend = () => {
-    // --- MODIFICA CHIAVE: Riavvia solo se l'utente non lo ha spento
+    isRecognizing = false;
     if (recognizing) {
-      console.log("Riconoscimento terminato (timeout/naturale). Riparto automaticamente...");
-      setTimeout(()=>recognition.start, 4000);
+      console.log("⏳ Riconoscimento terminato. Riavvio fra 2s...");
+      setTimeout(() => {
+        if (recognizing && !isRecognizing) {
+          try {
+            recognition.start();
+          } catch (err) {
+            console.warn("⚠️ Errore restart recognition:", err);
+          }
+        }
+      }, 2000);
     } else {
-      console.log("Riconoscimento terminato e lasciato spento.");
+      console.log("🛑 Riconoscimento fermato definitivamente.");
     }
   };
-  
-  // Non avviamo più in automatico, ma aspettiamo il click dell'utente.
-  // Se vuoi che parta da solo, decommenta le due righe sotto:
-  recognizing = true;
-  recognition.start();
-  // console.log("🎤 Riconoscimento avviato...");
 
+  recognition.onerror = (event) => {
+    console.error("❌ Errore riconoscimento vocale:", event.error);
+  };
 
+  // --- Azione su frase completa ---
+  const onSentenceComplete = async (userMessage) => {
+    console.log("🎯 Frase completa:", userMessage);
+
+    try {
+      const res = await fetch("/interpret", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: userMessage })
+      });
+
+      const text = await res.text();
+      if (text.length > 2) popWords(text);
+
+      const userMessageInterpolationEvent = new CustomEvent("usermessageinterpolation", {
+        detail: { text: userMessage, interpolation: text }
+      });
+      document.dispatchEvent(userMessageInterpolationEvent);
+
+    } catch (err) {
+      console.log("❌ Errore fetch /interpret:", err);
+    }
+  };
+
+  // --- Effetti grafici parole ---
   function popWords(text) {
-    const words = (text).split(",");
+    const words = text.split(",");
     words.forEach((w, i) => {
-      setTimeout(() => popWord(w.replaceAll(/\\|"/g, '')), i * 300); // effetto scaglionato
+      setTimeout(() => popWord(w.replaceAll(/\\|"/g, '')), i * 300);
     });
-    // --- MODIFICA: RIMOSSO recognition.stop() per evitare il loop infinito
   }
 
   function popWord(word) {
@@ -122,12 +132,15 @@ const start = () => {
       span.classList.add("fadeout");
     }, 2000 + Math.random() * 1000);
 
-    setTimeout(() => {
-      span.remove();
-    }, 4000);
+    setTimeout(() => span.remove(), 4000);
   }
 
+  // --- Event listener custom ---
   document.addEventListener('popwords', (e) => popWords(e.detail));
+
+  // Se vuoi partire subito in auto-ascolto:
+  recognizing = true;
+  recognition.start();
 };
 
 window.addEventListener('load', start);

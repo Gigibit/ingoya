@@ -49,7 +49,7 @@
                 <button id="update-params-btn" class="prompt-button" disabled>&#10148;</button>
             </div>
         </div>
-        <div id="canvas-container">
+        <div id="canvas-container" style="display: none;">
             <canvas id="fluidCanvas"></canvas>
             <video id="local-video-preview" autoplay playsinline muted
                 style="display: none; width: 100%; height: 100%; position: absolute; top: 0; left: 0; object-fit: cover;"></video>
@@ -62,13 +62,15 @@
             <p>Caricamento stream...</p>
         </div>
     </div>
+    <audio id="remote-audio" autoplay></audio>
+
     <script>window.selfMode = true</script>
     <script>window.audioManaged = true</script>
     <script src="/socket.io/socket.io.js"></script>
     <!-- <script type="text/javascript" src="dat.gui.min.js"></script>
     <script type="text/javascript" src="webgl.js"></script> -->
     <script type="module" src="draw.js"></script>
-    <!-- <script type="module" src="interpreter.js"></script> -->
+    <script type="module" src="interpreter.js"></script>
 </body>
 
 </html>
