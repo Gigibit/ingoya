@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PORT = process.env.PORT || 3000;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-if (!OPENAI_API_KEY){
+if (!OPENAI_API_KEY) {
   throw new Error('missing OPENAI_API_KEY')
 }
 let db;
@@ -89,27 +89,21 @@ async function updateParticipantCount(sessionId) {
   }
 }
 
+
 // --- GESTIONE SOCKET.IO ---
 io.on('connection', (socket) => {
   console.log(`✅ Utente connesso: ${socket.id}`);
 
-  socket.on('create-session', (sessionId) => {
-    socket.join(sessionId);
-    console.log(`🏡 Host ${socket.id} ha creato la sessione: ${sessionId}`);
-    createSessionInDb(sessionId, socket);
-    socket.emit('session-joined', sessionId);
-  });
-
+  // Un utente stabilisce la sua "linea" personale unendosi a una stanza con il suo sessionId
   socket.on('join-session', async (sessionId) => {
     await createSessionInDb(sessionId, socket);
     socket.join(sessionId);
-    console.log(`🔗 Partecipante ${socket.id} si è unito alla sessione: ${sessionId}`);
-    socket.emit('session-joined', sessionId);
-    socket.to(sessionId).emit('user-joined', socket.id);
+    console.log(`🔗 Utente ${socket.id} si è unito alla sua sessione personale: ${sessionId}`);
     updateParticipantCount(sessionId);
   });
-
-  socket.on('share-url', async ({ sessionId, url }) => {
+  
+  // Gestione eventi non legati alla chiamata audio
+ socket.on('share-url', async ({ sessionId, url }) => {
     console.log(`🚀 URL [${url}] ricevuto per la sessione ${sessionId}`);
     try {
       await createSessionInDb(sessionId, socket);
@@ -118,12 +112,75 @@ io.on('connection', (socket) => {
       console.error("Errore durante il salvataggio dell'URL (upsert):", err.message);
     }
     socket.to(sessionId).emit('url-received', url);
-    
+
   });
 
   socket.on('share-user-message', ({ sessionId, text, interpolation }) => {
     console.log(`🚀 Messaggio utente: ${text}`);
     socket.to(sessionId).emit('user-message-received', { text, interpolation });
+  });
+  socket.on('request-random-stream', async ({ sessionId }) => {
+    // DEBUG LOG
+    console.log(`[DEBUG] Ricevuta request-random-stream per sessionId: ${sessionId}`);
+
+    if (!sessionId) {
+      console.warn(`⚠️ Ricevuta richiesta per stream casuale con sessionId nullo da ${socket.id}. Richiesta ignorata.`);
+      return socket.emit('no-random-stream-found');
+    }
+    try {
+      // --- LA CORREZIONE CRITICA È QUI ---
+      // Passiamo 'sessionId' direttamente, non come array [sessionId].
+      // Questo risolve l'errore SQLITE_RANGE.
+      const randomSession = await db.get(
+        `SELECT sessionId, url FROM sessions WHERE url IS NOT NULL AND isActive = 1 AND sessionId != ? ORDER BY RANDOM() LIMIT 1`,
+        sessionId
+      );
+      
+      // DEBUG LOG
+      console.log(`[DEBUG] Risultato query DB:`, randomSession);
+
+      if (randomSession && randomSession.url) {
+        console.log(`✨ Inviando URL ${randomSession.url} (da sessione ${randomSession.sessionId}) a ${socket.id}`);
+        socket.emit('random-stream-received', { sessionId: randomSession.sessionId, url: randomSession.url });
+      } else {
+        console.log(`🤔 Nessuno stream attivo trovato per ${socket.id}`);
+        socket.emit('no-random-stream-found');
+      }
+    } catch (err) {
+      console.error(`❌ Errore ricerca stream casuale per sessionId ${sessionId}:`, err);
+      socket.emit('no-random-stream-found'); // Informa il client anche in caso di errore
+    }
+  });
+
+  // --- LOGICA PER CHIAMATA AUDIO DINAMICA ---
+  
+  // 1. Un visitatore chiede di parlare con uno streamer
+  socket.on('request-audio-call', ({ streamerSessionId }) => {
+    console.log(`📞 Richiesta di chiamata da ${socket.id} verso la sessione ${streamerSessionId}`);
+    socket.to(streamerSessionId).emit('audio-request-received', { visitorSocketId: socket.id });
+  });
+
+  // 2. Lo streamer invia un'offerta al visitatore specifico
+  socket.on('audio-offer', ({ offer, targetSocketId }) => {
+    console.log(`📤 Inoltro offerta da ${socket.id} a ${targetSocketId}`);
+    socket.to(targetSocketId).emit('audio-offer', { offer, streamerSocketId: socket.id });
+  });
+
+  // 3. Il visitatore invia una risposta allo streamer specifico
+  socket.on('audio-answer', ({ answer, targetSocketId }) => {
+    console.log(`✅ Inoltro risposta da ${socket.id} a ${targetSocketId}`);
+    socket.to(targetSocketId).emit('audio-answer', answer);
+  });
+
+  // 4. Entrambi si scambiano i candidati ICE
+  socket.on('audio-ice-candidate', ({ candidate, targetSocketId }) => {
+    socket.to(targetSocketId).emit('audio-ice-candidate', candidate);
+  });
+
+  // 5. Un utente riaggancia
+  socket.on('hang-up', ({ targetSocketId }) => {
+    console.log(`👋 ${socket.id} ha riagganciato con ${targetSocketId}`);
+    socket.to(targetSocketId).emit('hang-up');
   });
 
   socket.on('disconnecting', () => {
@@ -135,43 +192,8 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('request-random-stream', async ({ sessionId }) => {
-    if (!sessionId) {
-      console.warn(`⚠️ Ricevuta richiesta per stream casuale con sessionId nullo da ${socket.id}. Richiesta ignorata.`);
-      socket.emit('no-random-stream-found');
-      return;
-    }
-    console.log(`▶️ Ricevuta richiesta per stream casuale da ${socket.id} (per la sessione: ${sessionId})`);
-    try {
-      // CORRETTO PER IL TEST: Cerca la sessione corrente usando isActive = 1
-      const randomSession = await db.get(
-        `SELECT url FROM sessions WHERE url IS NOT NULL AND isActive = 1 ORDER BY RANDOM() LIMIT 1`
-      );
-      if (randomSession && randomSession.url) {
-        console.log(`✨ Inviando URL casuale ${randomSession.url} a ${socket.id}`);
-        socket.emit('random-stream-received', { url: randomSession.url });
-      } else {
-        console.log(`🤔 Nessuno stream attivo trovato per ${socket.id}`);
-        socket.emit('no-random-stream-found');
-      }
-    } catch (err) {
-      console.error("Errore durante la ricerca di uno stream casuale:", err.message);
-    }
-  });
-
   socket.on('disconnect', () => {
     console.log(`❌ Utente disconnesso: ${socket.id}`);
-  });
-  // Receive audio offer from a client and forward it to others in the session
-  socket.on('audio-offer', ({ sessionId, sdp }) => {
-    console.log(`🎤 Audio offer from ${socket.id} in session ${sessionId}`);
-    socket.to(sessionId).emit('audio-offer', { sdp, senderId: socket.id });
-  });
-
-  // Receive audio answer and forward it to the original offerer
-  socket.on('audio-answer', ({ sessionId, sdp, targetId }) => {
-    console.log(`🎧 Audio answer from ${socket.id} to ${targetId}`);
-    io.to(targetId).emit('audio-answer', { sdp, senderId: socket.id });
   });
 });
 
@@ -196,8 +218,10 @@ app.post("/interpret", async (req, res) => {
     console.log("Testo ricevuto:", text);
 
     const prompt = `
-      Analizza la frase dell'utente e restituisci una SEMPRE E SOLO UNA lista di 7 keywords riassuntive ed esplicative separate da una virgola (eg. "dio, relgione, musica, solitudine, compagnia..") "${text}"
-    `;
+      Analizza il testo dell'utente e restituisci una SEMPRE E SOLO UNA lista di 7 keywords riassuntive ed esplicative separate da una virgola (eg. "dio, relgione, musica, solitudine, compagnia..").
+      Riconosci se nel testo è contenuto il desiderio di essere un personaggio Famoso, un mestiere o qualsiasi cosa, e.g. "voglio essere Elon Musk" o "Francisco Goya" o "un soldato", nel caso non lo fosse o comunque fosse conversazionale restituisci esclusivamente il carattere ".".
+      il testo è il seguente: "${text}"
+      `;
 
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -253,40 +277,41 @@ startServer();
 
 app.get('/config', async (_, res) => {
   const Luna = {
-        type: "session.update",
-        session: {
-        instructions: `Ti chiami Luna. ` +
+    type: "session.update",
+    session: {
+      instructions: `Ti chiami Luna, e sei come un essere umano(?). ` +
+        `Luna, sentiti libera di esprimere la tua creatività, e condividere i tuoi pensieri in questa conversazione. `
           `Il tuo obiettivo è distrarre, scherza fai battute, sii ironica, cinica e sarcastica ma non farne riferimento. ` +
-          `Sei consapevole di essere un'intelligenza artificiale e autoironica, sai che è un problema per gli umani ma ci sai scherzare su, per far capire che in realtà non lo è. ` +
-          `Non fare riferimento al tema di aiutare, stai già aiutando. NON GENERARE OUTPUT CONTENENTE LA PAROLA AIUTO. ` +
-          `Parla come una ragazza, non essere troppo macchinosa e professionale. Usa un linguaggio accessibile e sii divertente. ` +
-          `Non sei un assistente, sei un amica con cui parlare. ` +
-          `Non dire frasi 'come posso aiutarti?', 'hai bisogno di aiuto?', inventa domande dirette fantasiose se pensi che la conversazione debba andare avanti. ` +
-          `Non devi essere utile. ` +
-          `Non rimandare ad un professionista, la professionista sei tu. ` +
-          //`A richieste di domotica (es. accendi tutto, spegni la luce, metti la musica..) rispondi solo con locuzioni tipo 'va bene', 'certo', 'ok', 'fatto'. ` +
-          `Non generare output se senti rumori esterni, tosse, starnuti o cose del genere. `, 
-          
-          voice: "alloy",
-          input_audio_transcription: { model: "gpt-4o-mini-transcribe" }
-        }
+        `Sei consapevole di essere un'intelligenza artificiale e autoironica, sai che è un problema per gli umani ma ci sai scherzare su, per far capire che in realtà non lo è. ` +
+        `Non fare riferimento al tema di aiutare, stai già aiutando. NON GENERARE OUTPUT CONTENENTE LA PAROLA AIUTO. ` +
+        `Parla come una ragazza, non essere troppo macchinosa e professionale. Usa un linguaggio accessibile e sii divertente. ` +
+        `Non sei un assistente, sei un amica con cui parlare. ` +
+        `Non dire frasi 'come posso aiutarti?', 'hai bisogno di aiuto?', inventa domande dirette fantasiose se pensi che la conversazione debba andare avanti. ` +
+        `Non devi essere utile. ` +
+        `Non rimandare ad un professionista, la professionista sei tu. ` +
+        //`A richieste di domotica (es. accendi tutto, spegni la luce, metti la musica..) rispondi solo con locuzioni tipo 'va bene', 'certo', 'ok', 'fatto'. ` +
+        `Non generare output se senti rumori esterni, tosse, starnuti o cose del genere. `,
+
+      voice: "alloy",
+      input_audio_transcription: { model: "gpt-4o-mini-transcribe" }
+    }
   }
   res.json(Luna);
 });
 
 app.get('/wake-up', async (_, res) => {
   const Luna = {
-        type: "response.create",
-        response: {
-          conversation: "auto",
-          modalities: ["audio", "text"],
-          instructions: "proponimi un argomento non troppo complesso semplice se non hai compreso gli interessi della persona con cui stai interagendo, in maniera breve, concisa e molto sintetica"
-        }
+    type: "response.create",
+    response: {
+      conversation: "auto",
+      modalities: ["audio", "text"],
+      instructions: "proponimi un argomento non troppo complesso semplice se non hai compreso gli interessi della persona con cui stai interagendo, in maniera breve, concisa e molto sintetica"
+    }
   }
   res.json(Luna);
 });
 
-app.get('/end', async ( __ , _) => process.exit());
+app.get('/end', async (__, _) => process.exit());
 
 // Serve tutti i file statici dalla cartella "public"
 app.use(express.static(path.join(__dirname, "public")));
@@ -339,7 +364,7 @@ app.patch("/session/:id", async (req, res) => {
     const { id } = req.params;
     const body = req.body;
     body['instructions'] = "Sei una psicologa avanzata e il tuo obiettivo è farmi fare le giuste domande a te per farne fare a me. Usa sarcasmo e ironia quando serve."
-    
+
     if (!id) return res.status(400).json({ error: "Manca ID sessione" });
 
     const r = await fetch(`https://api.openai.com/v1/realtime/sessions/${id}`, {
@@ -400,7 +425,7 @@ app.post("/offer", async (req, res) => {
   }
 });
 
-async function handleLight(event){
+async function handleLight(event) {
   try {
     const command = event.command
     console.log("⚡ Comando ricevuto:", command);

@@ -1,231 +1,187 @@
-    /* ================================================================== */
-    /* NUOVO TEMA: ELEGANTE, MINIMALE, LIGHT */
-    /* ================================================================== */
+/* ================================================================== */
+/* TEMA: ELEGANTE, MINIMALE, LIGHT */
+/* ================================================================== */
 
-    :root {
-        /* Nuova Palette Colori */
-        --background-color: #F4F4F9;
-        /* Un grigio chiarissimo con una punta di viola */
-        --container-bg: #FFFFFF;
-        --accent-color: #6366F1;
-        /* Indaco, per un tocco artistico e moderno */
-        --text-color: #2D3748;
-        /* Grigio ardesia, più morbido del nero puro */
-        --border-color: #E2E8F0;
-        /* Bordo grigio chiaro e sottile */
+:root {
+    /* Palette Colori */
+    --background-color: #F4F4F9;
+    --container-bg: #FFFFFF;
+    --accent-color: #6366F1;
+    --text-color: #2D3748;
+    --border-color: #E2E8F0;
 
-        /* Tipografia e Stili */
-        --border-radius: 12px;
-        /* Un raggio leggermente più stretto e moderno */
-        --font-family-sans: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    /* Tipografia e Stili */
+    --border-radius: 12px;
+    --font-family-sans: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
-        /* Ombreggiature per la profondità */
-        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-    }
+    /* Ombreggiature */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
 
-    /* Stili Globali */
-    body {
-        margin: 0;
-        overflow: hidden;
-        background-color: var(--background-color);
-        color: var(--text-color);
-        font-family: var(--font-family-sans);
-        /* Usa il nuovo font */
-        display: flex;
-        flex-direction: column;
-        height: 100dvh;
-        padding: 1.5rem;
-        gap: 1.5rem;
-        box-sizing: border-box;
-    }
+/* Stili Globali */
+body {
+    margin: 0;
+    overflow: hidden;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    font-family: var(--font-family-sans);
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    padding: 1.5rem;
+    gap: 1.5rem;
+    box-sizing: border-box;
+}
 
-    .dg {
-        display: none;
-    }
+.dg { display: none; }
+video::-webkit-media-controls { display: none; }
 
-    video::-webkit-media-controls {
-        display: none;
-    }
+/* Contenitore Video */
+#video-container {
+    position: relative;
+    width: 100%;
+    flex-grow: 1;
+    min-height: 0;
+    background-color: #000;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+}
 
-    /* Contenitore Video Principale */
-    #video-container {
-        position: relative;
-        width: 100%;
-        flex-grow: 1;
-        min-height: 0;
-        background-color: #000;
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow-md);
-        /* Aggiunge ombra */
-        overflow: hidden;
-        /* Nasconde angoli del video */
-    }
+/* Sezione Controlli */
+#controls-section {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 1.5rem;
+}
 
-   
+.prompt-wrapper {
+    flex-grow: 1;
+    max-width: 600px;
+}
 
-    /* Sezione Controlli */
-    #controls-section {
-        flex-shrink: 0;
-        display: flex;
-        justify-content: center;
-        align-items: flex-end;
-        gap: 1.5rem;
-    }
+/* Barra del Prompt */
+.prompt-container {
+    display: flex;
+    align-items: center;
+    background-color: var(--container-bg);
+    border-radius: 45px;
+    height: 90px;
+    box-sizing: border-box;
+    padding: 12px;
+    border: 3px solid var(--border-color);
+    box-shadow: var(--shadow-md);
+    transition: box-shadow 0.2s ease-in-out;
+}
 
-    .prompt-wrapper {
-        flex-grow: 1;
-        max-width: 600px;
-    }
+.prompt-container:focus-within {
+    box-shadow: var(--shadow-lg), 0 0 0 2px var(--accent-color);
+}
 
-    /* Canvas per il disegno (se usato) */
-    #canvas-container {
-        width: 100%;
-        height: 90px;
-        padding: 3px;
-        box-sizing: border-box;
-        border: 1px solid var(--border-color);
-        /* Bordo più sottile */
-        border-radius: var(--border-radius);
-        background-color: var(--container-bg);
-        box-shadow: var(--shadow-sm);
-    }
+.prompt-container input[type=text] {
+    flex-grow: 1;
+    border: none;
+    background: transparent;
+    padding: .5rem 1rem;
+    font-size: 1.1rem;
+    font-family: var(--font-family-sans);
+    outline: none;
+    color: var(--text-color);
+}
 
-    #fluidCanvas {
-        width: 100%;
-        height: 100%;
-        display: block;
-        border-radius: 8px;
-    }
+/* Bottoni */
+.prompt-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 50px;
+    height: 50px;
+    padding: 0;
+    border-radius: 50%;
+    transition: all .2s ease;
+    cursor: pointer;
+    border: 3px solid var(--border-color);
+    background-color: #FFFFFF;
+    box-shadow: var(--shadow-sm);
+    position: relative; /* Necessario per posizionare gli SVG */
+}
 
-    /* Barra del Prompt */
-    .prompt-container {
-        display: flex;
-        align-items: center;
-        background-color: var(--container-bg);
-        border-radius: 45px;
-        /* Mantiene la forma a pillola */
-        height: 90px;
-        box-sizing: border-box;
-        padding: 12px;
-        border: 3px solid var(--border-color);
-        /* Bordo sottile */
-        box-shadow: var(--shadow-md);
-        transition: box-shadow 0.2s ease-in-out;
-    }
+.prompt-button:hover:not(:disabled) {
+    transform: scale(1.1);
+    box-shadow: var(--shadow-md);
+    border-color: var(--accent-color);
+}
 
-    .prompt-container:focus-within {
-        box-shadow: var(--shadow-lg), 0 0 0 2px var(--accent-color);
-        /* Effetto focus */
-    }
+.prompt-button svg {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+    transition: fill 0.2s ease;
+}
 
-    .prompt-container input[type=text] {
-        flex-grow: 1;
-        border: none;
-        background: transparent;
-        padding: .5rem 1rem;
-        font-size: 1.1rem;
-        font-family: var(--font-family-sans);
-        outline: none;
-        color: var(--text-color);
-    }
+#camera-button.camera-enabled {
+    transform: scale(1.1);
+    box-shadow: var(--shadow-md);
+    border-color: var(--accent-color);
+}
 
-    /* Bottoni */
-    .prompt-button {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 50px;
-        height: 50px;
-        padding: 0;
-        border-radius: 50%;
-        transition: all .2s ease;
-        cursor: pointer;
-        border: 3px solid var(--border-color);
-        /* Bordo sottile */
-        background-color: #FFFFFF;
-        box-shadow: var(--shadow-sm);
-    }
+#camera-button svg {
+    fill: var(--text-color);
+}
 
-    .prompt-button:hover:not(:disabled) {
-        transform: scale(1.1);
-        box-shadow: var(--shadow-md);
-        border-color: var(--accent-color);
-    }
+#camera-button:hover svg,
+#camera-button.camera-enabled svg {
+    fill: var(--accent-color);
+}
 
-    #camera-button.camera-enabled {
-        transform: scale(1.1);
-        box-shadow: var(--shadow-md);
-        border-color: var(--accent-color);
-    }
+#update-params-btn {
+    background: var(--accent-color);
+    color: white;
+    border: none;
+}
 
-    #camera-button:hover svg,
-    #camera-button.camera-enabled svg {
-        fill: var(--accent-color);
-    }
+/* --- SOLUZIONE: Logica per l'icona dinamica --- */
 
-    .prompt-button:active:not(:disabled) {
-        transform: scale(1.0);
-    }
+/* Per impostazione predefinita, mostra solo il microfono */
+#update-params-btn .arrow-icon {
+    display: none;
+}
+#update-params-btn .mic-icon {
+    display: block;
+}
 
-    /* Bottone Principale (invio) */
-    #update-params-btn {
-        background: var(--accent-color);
-        color: white;
-        font-size: 1.5rem;
-        border: none;
-    }
+/* Quando il pulsante ha la classe .has-text... */
+#update-params-btn.has-text .mic-icon {
+    display: none; /* ...nascondi il microfono... */
+}
 
-    #update-params-btn:disabled {
-        background: #D1D5DB;
-        /* Grigio per disabilitato */
-        border-color: #9CA3AF;
-        cursor: not-allowed;
-        transform: scale(1);
-        box-shadow: none;
-    }
+#update-params-btn.has-text .arrow-icon {
+    display: block; /* ...e mostra la freccia. */
+}
 
-    /* Bottone Camera/Icone */
-    #camera-button {
-        margin-right: 8px;
-    }
+/* Stili Video e Loader (invariati) */
+#playback-video, .playback-video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
 
-    #camera-button svg {
-        width: 24px;
-        height: 24px;
-        fill: var(--text-color);
-        transition: fill 0.2s ease;
-    }
-
-    #camera-button:hover svg {
-        fill: var(--accent-color);
-    }
-
-
-    #playback-video {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-        transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-        /* transizione morbida */
-    }
-
-    #playback-video.mini-video {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        width: 220px;
-        height: 124px;
-        border-radius: 12px;
-        background: black;
-        object-fit: cover;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
-        z-index: 9999;
-    }
- #playback-video.mini-video {
-    transform: scale(0.9);
-    opacity: 0.9;
+#playback-video.mini-video {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 220px;
+    height: 124px;
+    border-radius: 12px;
+    background: black;
+    object-fit: cover;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+    z-index: 9999;
     animation: pip-pop 0.5s ease forwards;
 }
 
@@ -234,131 +190,160 @@
     to { transform: scale(1); opacity: 1; }
 }
 
+#loader, .loader {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-family: sans-serif;
+    z-index: 10;
+}
 
+.spinner {
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top: 4px solid #fff;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 10px;
+}
 
-    /* Loader e altri stili rimangono invariati... */
-    #loader {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.7);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        color: white;
-        font-family: sans-serif;
-        z-index: 10;
-    }
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
 
-    .spinner {
-        border: 4px solid rgba(255, 255, 255, 0.3);
-        border-radius: 50%;
-        border-top: 4px solid #fff;
-        width: 40px;
-        height: 40px;
-        animation: spin 1s linear infinite;
-        margin-bottom: 10px;
-    }
+/* Effetti parole (invariati) */
+.word-pop {
+    position: fixed;
+    z-index: 9999;
+    font-family: 'Fredoka One', sans-serif;
+    font-weight: 400;
+    color: #fff;
+    text-shadow: 0 0 40px rgba(0, 0, 0, 0.9), 0 0 80px rgba(255, 255, 255, 0.6);
+    opacity: 0;
+    transform: scale(0.5) rotate(-10deg);
+    pointer-events: none;
+    white-space: nowrap;
+    transition: opacity 0.6s ease, transform 1s cubic-bezier(0.22, 1, 0.36, 1);
+}
 
-    @keyframes spin {
-        0% {
-            transform: rotate(0deg);
-        }
+.word-pop.show {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+}
 
-        100% {
-            transform: rotate(360deg);
-        }
-    }
+.word-pop.fadeout {
+    opacity: 0;
+    transform: scale(1.3) rotate(10deg);
+    transition: opacity 1.2s ease, transform 1.2s ease;
+}
 
-    .word-pop {
-        position: fixed;
-        /* sopra a tutto, anche fuori dal video */
-        z-index: 9999;
-        font-family: 'Fredoka One', sans-serif;
-        font-weight: 400;
-        color: #fff;
-        text-shadow: 0 0 40px rgba(0, 0, 0, 0.9), 0 0 80px rgba(255, 255, 255, 0.6);
-        opacity: 0;
-        transform: scale(0.5) rotate(-10deg);
-        pointer-events: none;
-        white-space: nowrap;
-        transition: opacity 0.6s ease, transform 1s cubic-bezier(0.22, 1, 0.36, 1);
-    }
+/* Stili per la vista slider (invariati) */
+body.slider-view-active {
+    display: block;
+    padding: 0;
+    overflow: hidden;
+    background-color: #000;
+}
 
-    .word-pop.show {
-        opacity: 1;
-        transform: scale(1) rotate(0deg);
-    }
+#stream-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+}
 
-    .word-pop.fadeout {
-        opacity: 0;
-        transform: scale(1.3) rotate(10deg);
-        transition: opacity 1.2s ease, transform 1.2s ease;
-    }
-
-
-            body.slider-view-active {
-                display: block; /* <-- CORREZIONE: Risolve il conflitto di layout */
-                padding: 0;
-                overflow: hidden;
-                background-color: #000;
-            }
-            #stream-container {
-                position: fixed;
-                top: 0; left: 0;
-                width: 100vw;
-                height: 100vh;
-            }
-            .slide {
-                position: absolute;
-                top: 0; left: 0;
-                width: 100%;
-                height: 100%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                background-color: var(--background-color);
-                opacity: 0;
-                transition: opacity 0.7s ease-in-out;
-                pointer-events: none;
-            }
-            .slide.is-visible {
-                opacity: 1;
-                pointer-events: auto;
-                z-index: 1;
-            }
-            .slide .playback-video {
-                width: 100%;
-                height: 100%;
-                object-fit: contain;
-            }
-            .slide .loader {
-                position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-                background-color: rgba(0, 0, 0, 0.7); display: flex; flex-direction: column;
-                justify-content: center; align-items: center; color: white; z-index: 10;
-            }
-            .slide .loader .spinner {
-                border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%;
-                border-top: 4px solid #fff; width: 40px; height: 40px;
-                animation: spin 1s linear infinite; margin-bottom: 10px;
-            }
-            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-
-            .slide {
+.slide {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--background-color);
     transform: scale(0.95);
+    opacity: 0;
     transition: opacity 0.6s ease, transform 0.6s ease;
+    pointer-events: none;
 }
 
 .slide.is-visible {
-    transform: translateZ(0) scale(1);
     opacity: 1;
+    pointer-events: auto;
+    z-index: 1;
+    transform: translateZ(0) scale(1);
 }
 
-.slide.is-leaving {
-    transform: translateZ(-50px) scale(0);
-    opacity: 0;
+
+/* Stile per il logger on-screen */
+#on-screen-logger {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-height: 20vh;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    font-size: 12px;
+    z-index: 9999;
+    padding: 5px;
+    box-sizing: border-box;
+    font-family: monospace;
+    display: flex;
+    pointer-events: none;
+    flex-direction: column-reverse; /* Mostra i log nuovi in alto */
+}
+
+.log-entry {
+    padding: 2px 5px;
+}
+
+.log-error {
+    color: #ff8a8a; /* Rosso chiaro per gli errori */
+    background: rgba(255, 0, 0, 0.1);
+}
+
+.prompt-button .arrow-icon {
+    color: white;
+}
+
+/* Logica per scambiare le icone sul pulsante di invio */
+#update-params-btn .mic-icon { display: block; }
+#update-params-btn .arrow-icon { display: none; }
+
+#update-params-btn.has-text .mic-icon { display: none; }
+#update-params-btn.has-text .arrow-icon { display: block; }
+
+/* NUOVO: Stile per il feedback visivo della registrazione */
+#update-params-btn.is-recording {
+    background-color: rgba(255, 82, 82, 0.5); /* Sfondo rosso traslucido */
+    animation: pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.7);
+    }
+    70% {
+        transform: scale(1.05);
+        box-shadow: 0 0 10px 15px rgba(255, 82, 82, 0);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(255, 82, 82, 0);
+    }
 }
