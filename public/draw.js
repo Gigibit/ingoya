@@ -241,6 +241,7 @@ window.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`${API_BASE_URL}/v1/streams/${streamId}`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${API_KEY}`, 'x-client-source': 'streamdiffusion-web', 'Content-Type': 'application/json' }, body: JSON.stringify(paramsPayload) });
             if (!response.ok) throw new Error(`API Update Error: ${response.statusText}`);
             promptInput.value = '';
+            updateBtn.classList.toggle('has-text', false);
         } catch (error) { console.error('Error updating parameters:', error); }
         finally { updateBtn.disabled = false; }
     }

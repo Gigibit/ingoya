@@ -69,10 +69,17 @@ const start = (stream, peerConnection) => {
   };
   
   // Gestori eventi tocco e mouse (unchanged)
-  updateBtn.addEventListener('mousedown', startRecognition);
+  updateBtn.addEventListener('mousedown', (e)=>{
+    if (!updateBtn.classList.contains('has-text')) {
+      e.preventDefault();
+      startRecognition();
+    }
+  });
   updateBtn.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    startRecognition();
+    if (!updateBtn.classList.contains('has-text')) {
+      e.preventDefault();
+      startRecognition();
+    }
   });
 
   updateBtn.addEventListener('mouseup', stopRecognition);
@@ -98,8 +105,8 @@ const start = (stream, peerConnection) => {
         const newStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const newAudioTracks = newStream.getAudioTracks(); // Get the array of tracks
         
-        if (newAudioTracks.length > 0) {
-            const newAudioTrack = newAudioTracks; // **THE FIX**: Select the first track from the array
+        if (newAudioTracks.length == 1) {
+            const newAudioTrack = newAudioTracks[0]; // **THE FIX**: Select the first track from the array
 
             const sender = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
             if (sender) {
@@ -109,7 +116,9 @@ const start = (stream, peerConnection) => {
             } else {
                 console.warn("Nessun sender audio trovato per ripristinare la traccia.");
             }
-        } else {
+        } if (newAudioTracks.length == 1) {
+            console.error("Multiple audio track, not handled for now.");
+        }else {
             console.error("Impossibile riacquisire una traccia audio valida dal microfono.");
         }
     } catch (err) {
