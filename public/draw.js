@@ -20,7 +20,6 @@ window.addEventListener('DOMContentLoaded', () => {
     const cameraButton = document.getElementById('camera-button');
 
     // --- VARIABILI DI STATO (invariate) ---
-    let streamId = null;
     let peerConnection = null;
     let isCameraActive = false;
     let localStream = null;
@@ -166,7 +165,6 @@ window.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) throw new Error(`Errore dal server /stream-session: ${response.statusText}`);
             const sessionData = await response.json();
             console.log(sessionData)
-            streamId = sessionData.streamId;
             sessionId = sessionData.sessionId
 
             // 3. Negozia con Livepeer per ottenere il WHEP URL
@@ -212,6 +210,9 @@ window.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Errore durante getOrCreateStreamSession:', error);
         }
+        document.dispatchEvent(new CustomEvent('streamAudioReady', {
+            detail: { localAudioStream, peerConnection }
+        }))
     }
 
 
@@ -348,9 +349,6 @@ window.addEventListener('DOMContentLoaded', () => {
             localStream = fluidCanvas.captureStream();
 
         }
-        document.dispatchEvent(new CustomEvent('streamAudioReady', {
-            detail: { localAudioStream, peerConnection }
-        }))
         return localStream
 
     }

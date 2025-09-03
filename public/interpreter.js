@@ -2,7 +2,7 @@ let pc;
 const start = (stream, peerConnection) => {
   // We receive the entire camera stream, which contains the audio track we need.
   pc = peerConnection
-  const localAudioStream = stream; 
+  let localAudioStream = stream; 
   const SpeechRecognition = (window.SpeechRecognition || window.webkitSpeechRecognition);
 
   if (!SpeechRecognition) {
@@ -116,7 +116,7 @@ const start = (stream, peerConnection) => {
             } else {
                 console.warn("Nessun sender audio trovato per ripristinare la traccia.");
             }
-        } if (newAudioTracks.length == 1) {
+        } if (newAudioTracks.length > 1) {
             console.error("Multiple audio track, not handled for now.");
         }else {
             console.error("Impossibile riacquisire una traccia audio valida dal microfono.");
@@ -138,12 +138,15 @@ const start = (stream, peerConnection) => {
   };
 
   recognition.onresult = (event) => {
-    console.log("-> ✅ onresult event fired!");
+    console.log("-> ✅ onresult event fired!", event);
     let interimTranscript = '';
     let finalTranscript = '';
     
     for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i].transcript;
+      let transcript = event.results[i].transcript;
+      if (event.results[i] && !transcript){
+        transcript = event.results[i][0].transcript
+      }
       if (event.results[i].isFinal) {
         finalTranscript += transcript;
       } else {

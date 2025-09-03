@@ -15,6 +15,7 @@ import {
   getSessionForWhip,
   saveWhipDetails,
   saveWhepUrlDetails,
+  getStreamIdBySessionId,
   updateDbParticipantCount,
   getRandomActiveStream
 } from './database.js';
@@ -157,7 +158,7 @@ app.get('/random-stream', async (req, res) => {
   try {
     const randomSession = await getRandomActiveStream(db, excludeSessionId);
     if (randomSession && randomSession.whepUrl) {
-      res.json({ sessionId: randomSession.sessionId, url: randomSession.whepUrl });
+      res.json({ sessionId: randomSession.sessionId, whepUrl: randomSession.whepUrl });
     } else {
       res.status(404).json({ message: "Nessun altro stream attivo trovato." });
     }
