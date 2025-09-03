@@ -9,55 +9,55 @@ const start = () => {
   const updateBtn = document.getElementById('update-params-btn');
   const promptInput = document.getElementById('prompt');
 
-  // --- Stati ---
-  let isListening = false; // Stato reale del riconoscimento
+  let isListening = false;
+  let finalTranscriptDelivered = false; // Flag per evitare invii multipli
+  let stopTimer = null; // Timer per gestire l'arresto ritardato
 
-  // --- Config ---
+  // --- CONFIGURAZIONE ---
   recognition.lang = 'it-IT';
   recognition.interimResults = true;
-  recognition.maxAlternatives = 1;
 
-  // --- Gestione della UI del Pulsante ---
   promptInput.addEventListener('input', () => {
     updateBtn.classList.toggle('has-text', promptInput.value.trim() !== '');
   });
 
-  // --- Funzioni per avviare e fermare il riconoscimento ---
   const startRecognition = () => {
-    if (isListening || promptInput.value.trim() !== '') return;
+    if (updateBtn.classList.contains('has-text') || isListening) return;
+    
+    console.log("Tentativo di avvio riconoscimento...");
     try {
+      finalTranscriptDelivered = false; // Resetta il flag
+      promptInput.value = ''; // Pulisce l'input precedente
       recognition.start();
     } catch(e) {
-      console.error("Errore all'avvio del riconoscimento:", e.message);
+      console.error("Errore immediato su recognition.start():", e.message);
     }
   };
 
   const stopRecognition = () => {
     if (!isListening) return;
-    recognition.stop();
+    
+    console.log("Rilascio pulsante: avvio timer per arresto...");
+    // Diamo 750ms di tempo all'API per processare l'audio prima di fermarla.
+    if (stopTimer) clearTimeout(stopTimer);
+    stopTimer = setTimeout(() => {
+        if(isListening) {
+            console.log("Timer scaduto. Arresto forzato del riconoscimento.");
+            recognition.stop();
+        }
+    }, 750); 
   };
   
-  // --- Logica "Premi per Parlare" (Push-to-Talk) ---
-  // Usiamo mousedown e touchstart per avviare
+  // Gestori eventi tocco e mouse
   updateBtn.addEventListener('mousedown', startRecognition);
   updateBtn.addEventListener('touchstart', (e) => {
-    e.preventDefault(); // Impedisce l'attivazione di eventi 'mousedown' duplicati
+    e.preventDefault();
     startRecognition();
   });
 
-  // Usiamo mouseup, mouseleave e touchend per fermare
   updateBtn.addEventListener('mouseup', stopRecognition);
   updateBtn.addEventListener('mouseleave', stopRecognition);
   updateBtn.addEventListener('touchend', stopRecognition);
-  
-  // Gestione click per invio testo
-  updateBtn.addEventListener('click', (e) => {
-      if (updateBtn.classList.contains('has-text')) {
-          console.log("Click rilevato per invio testo.");
-          document.dispatchEvent(new CustomEvent('sendprompt'));
-      }
-  });
-
 
   // --- Eventi dell'API SpeechRecognition ---
   recognition.onstart = () => {
@@ -70,29 +70,55 @@ const start = () => {
     isListening = false;
     updateBtn.classList.remove('is-recording');
     console.log("🛑 Ascolto terminato.");
+
+    // Fallback: se l'ascolto finisce senza che un risultato finale sia stato inviato,
+    // inviamo l'ultimo testo parziale disponibile.
+    if (!finalTranscriptDelivered && promptInput.value.trim()) {
+        console.log(`Invio forzato dell'ultimo transcript: "${promptInput.value.trim()}"`);
+        onSentenceComplete(promptInput.value.trim());
+    }
   };
 
   recognition.onerror = (event) => {
-    console.error("❌ Errore Riconoscimento Vocale:", event.error);
+    console.error(`❌ ERRORE RICONOSCIMENTO: ${event.error}`);
     isListening = false;
     updateBtn.classList.remove('is-recording');
   };
 
   recognition.onresult = (event) => {
+    console.log("-> ✅ onresult event fired!");
+    let interimTranscript = '';
     let finalTranscript = '';
+    
     for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
       if (event.results[i].isFinal) {
-        finalTranscript += event.results[i][0].transcript;
+        finalTranscript += transcript;
+      } else {
+        interimTranscript += transcript;
       }
     }
+    
+    // Aggiorna l'input con l'ultimo risultato disponibile
+    promptInput.value = interimTranscript || finalTranscript;
+
     if (finalTranscript) {
-        console.log("Testo finale riconosciuto:", finalTranscript);
+        console.log(`Finale: "${finalTranscript.trim()}"`);
+        promptInput.dispatchEvent(new Event('input')); 
         onSentenceComplete(finalTranscript.trim());
+        finalTranscriptDelivered = true; // Segna che abbiamo inviato un risultato
+        if (stopTimer) clearTimeout(stopTimer); // Annulla il timer se arriva un risultato finale
     }
   };
 
-  // --- Azione su frase completa ---
+  // Log di debug aggiuntivi
+  recognition.onspeechstart = () => { console.log("🗣️ Speech detected (onspeechstart)"); };
+  recognition.onaudiostart = () => { console.log("🔊 Audio capture started (onaudiostart)"); };
+
   const onSentenceComplete = async (userMessage) => {
+    if (!userMessage || finalTranscriptDelivered) return;
+    finalTranscriptDelivered = true; // Previene invii doppi
+
     try {
       const res = await fetch("/interpret", {
         method: "POST",
@@ -100,46 +126,16 @@ const start = () => {
         body: JSON.stringify({ text: userMessage })
       });
       const text = await res.text();
-      if (text.length > 4) popWords(text);
-      document.dispatchEvent(new CustomEvent("usermessageinterpolation", {
+      const userMessageInterpolationEvent = new CustomEvent("usermessageinterpolation", {
         detail: { text: userMessage, interpolation: text }
-      }));
+      });
+      document.dispatchEvent(userMessageInterpolationEvent);
     } catch (err) {
       console.error("❌ Errore fetch /interpret:", err);
     }
   };
-
-  // --- Effetti grafici parole ---
-  function popWords(text) {
-    const words = text.split(",");
-    words.forEach((w, i) => {
-      setTimeout(() => popWord(w.replaceAll(/\\|"/g, '')), i * 300);
-    });
-  }
-
-  function popWord(word) {
-    const span = document.createElement("span");
-    span.textContent = word;
-    span.className = "word-pop";
-    const fontSize = Math.random() * 7 + 5;
-    span.style.fontSize = fontSize + "vw";
-    const x = Math.random() * (window.innerWidth - 200);
-    const y = Math.random() * (window.innerHeight - 200);
-    span.style.left = `${x}px`;
-    span.style.top = `${y}px`;
-    document.body.appendChild(span);
-    requestAnimationFrame(() => span.classList.add("show"));
-    setTimeout(() => {
-      span.classList.remove("show");
-      span.classList.add("fadeout");
-    }, 2000 + Math.random() * 1000);
-    setTimeout(() => span.remove(), 4000);
-  }
-  document.addEventListener('popwords', (e) => popWords(e.detail));
-
 };
 
-// Avvia tutto solo quando la pagina è caricata
 if (document.readyState === 'loading') {
     window.addEventListener('DOMContentLoaded', start);
 } else {
