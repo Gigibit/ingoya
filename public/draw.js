@@ -31,18 +31,54 @@ window.addEventListener('DOMContentLoaded', () => {
     const API_KEY = "sk_iK9uX4DPSmmGekB8McXnJGEKB3wWWozjtKKjUKa3WBVirYxMtXL5GLrZiTJZQ8Pb";
     const API_BASE_URL = "https://api.daydream.live";
     const PIPELINE_ID = "pip_qpUgXycjWF6YMeSL";
-    
+
     // --- VARIABILI DI STATO (invariate) ---
     let streamId = null;
     let peerConnection = null;
     let isCameraActive = false;
     let cameraStream = null;
+    // --- MODIFICA #2: Logica estratta in una nuova funzione ---
+    function handleNewRandomStream(streamerSessionId, url) {
+        console.log(`🎥 Stream ricevuto dalla sessione ${streamerSessionId}.`);
+        hangUp();
 
-    // --- FUNZIONI DI BASE (invariate) ---
-    function preloadNextStream() {
-        if (socket) socket.emit('request-random-stream', { sessionId });
+        const streamContainer = document.getElementById('stream-container');
+        const preloadedVideoElement = document.querySelector('#random-stream-slide .playback-video');
+
+        if (isSliderViewActive && streamContainer) {
+            const newSlide = document.createElement('div');
+            newSlide.className = 'slide';
+            newSlide.innerHTML = `<video class="playback-video" autoplay playsinline muted></video><div class="loader"></div>`;
+            streamContainer.appendChild(newSlide);
+            handleStartPlayback(newSlide.querySelector('video'), url);
+        } else {
+            handleStartPlayback(preloadedVideoElement, url);
+        }
+
+        if (localAudioStream) {
+            console.log(`➡️ Invio richiesta di chiamata alla sessione ${streamerSessionId}`);
+            socket.emit('request-audio-call', { streamerSessionId });
+        }
     }
-    
+    // --- FUNZIONI DI BASE (invariate) ---
+    async function preloadNextStream() {
+        console.log("🔌 Richiesta REST per precaricamento...");
+        try {
+            const response = await fetch(`/random-stream?excludeSessionId=${sessionId}`);
+            if (response.status === 404) {
+                console.log("🤔 Nessuno stream attivo trovato dal server (via REST).");
+                return;
+            }
+            if (!response.ok) {
+                throw new Error(`Errore di rete: ${response.statusText}`);
+            }
+            const data = await response.json(); // { sessionId, whepUrl }
+            handleNewRandomStream(data.sessionId, data.whepUrl);
+        } catch (err) {
+            console.error("❌ Errore durante la richiesta dello stream casuale via REST:", err);
+        }
+    }
+
     function removeSmooth(element, duration = 600) {
         const start = performance.now();
         function step(timestamp) {
@@ -130,36 +166,73 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         tryToConnect(5000);
     }
-    async function startLivepeerStream(sourceStream) {
-        if (!sourceStream) return console.error("No source stream.");
+    async function getOrCreateStreamSession(sourceStream) {
+        if (!sourceStream) return console.error("Source stream non fornito.");
+
+        console.log(`Fase 1: Ottenendo i dati WHIP dal server per ${sessionId}...`);
         try {
+            // 1. Definisci i parametri della pipeline
+            const pipeline_params = {
+                "pipeline_id": PIPELINE_ID,
+                "pipeline_params": { "model_id": "stabilityai/sd-turbo", "prompt": "describe human beings.", "negative_prompt": "blurry, low quality, flat, 2d", "num_inference_steps": 50, "seed": 42, "t_index_list": [2, 4, 6], "controlnets": [{ "conditioning_scale": 0.4, "enabled": true, "model_id": "thibaud/controlnet-sd21-openpose-diffusers", "preprocessor": "pose_tensorrt" }, { "conditioning_scale": 0.14, "enabled": true, "model_id": "thibaud/controlnet-sd21-hed-diffusers", "preprocessor": "soft_edge" }, { "conditioning_scale": 0.27, "enabled": true, "model_id": "thibaud/controlnet-sd21-canny-diffusers", "preprocessor": "canny", "preprocessor_params": { "high_threshold": 200, "low_threshold": 100 } }, { "conditioning_scale": 0.34, "enabled": true, "model_id": "thibaud/controlnet-sd21-depth-diffusers", "preprocessor": "depth_tensorrt" }, { "conditioning_scale": 0.66, "enabled": true, "model_id": "thibaud/controlnet-sd21-color-diffusers", "preprocessor": "passthrough" }] }
+            };
+
+            // 2. Chiama il server per ottenere il WHIP URL
+            const response = await fetch('/stream-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId, pipeline_params })
+            });
+            if (!response.ok) throw new Error(`Errore dal server /stream-session: ${response.statusText}`);
+            const sessionData = await response.json(); // { streamId, whipUrl }
+            streamId = sessionData.streamId;
+
+            // 3. Negozia con Livepeer per ottenere il WHEP URL
+            console.log(`Fase 2: Connessione a Livepeer tramite WHIP a ${sessionData.whipUrl}`);
             if (peerConnection) peerConnection.close();
-            const initPayload = { "name": "boya-stream", "pipeline_id": PIPELINE_ID, "pipeline_params": { "model_id": "stabilityai/sd-turbo", "prompt": "describe human beings.", "negative_prompt": "blurry, low quality, flat, 2d", "num_inference_steps": 50, "seed": 42, "t_index_list": [2, 4, 6], "controlnets": [{ "conditioning_scale": 0.4, "enabled": true, "model_id": "thibaud/controlnet-sd21-openpose-diffusers", "preprocessor": "pose_tensorrt" }, { "conditioning_scale": 0.14, "enabled": true, "model_id": "thibaud/controlnet-sd21-hed-diffusers", "preprocessor": "soft_edge" }, { "conditioning_scale": 0.27, "enabled": true, "model_id": "thibaud/controlnet-sd21-canny-diffusers", "preprocessor": "canny", "preprocessor_params": { "high_threshold": 200, "low_threshold": 100 } }, { "conditioning_scale": 0.34, "enabled": true, "model_id": "thibaud/controlnet-sd21-depth-diffusers", "preprocessor": "depth_tensorrt" }, { "conditioning_scale": 0.66, "enabled": true, "model_id": "thibaud/controlnet-sd21-color-diffusers", "preprocessor": "passthrough" }] } };
-            const createStreamResponse = await fetch(`${API_BASE_URL}/v1/streams`, { method: 'POST', headers: { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(initPayload) });
-            if (!createStreamResponse.ok) throw new Error(`API Error: ${createStreamResponse.statusText}`);
-            const streamData = await createStreamResponse.json();
-            streamId = streamData.id;
             peerConnection = new RTCPeerConnection();
             sourceStream.getTracks().forEach(track => peerConnection.addTrack(track, sourceStream));
+            
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
-            const whipResponse = await fetch(streamData.whip_url, { method: 'POST', headers: { 'Content-Type': 'application/sdp' }, body: peerConnection.localDescription.sdp });
-            if (whipResponse.status !== 201) throw new Error(`WHIP fallito: ${whipResponse.statusText}`);
+            
+            const whipResponse = await fetch(sessionData.whipUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/sdp' },
+                body: peerConnection.localDescription.sdp
+            });
+            if (whipResponse.status !== 201) throw new Error(`Connessione WHIP fallita: ${whipResponse.statusText}`);
+            
+            // 4. Estrai il WHEP URL e salvalo sul nostro server
             const whepUrl = whipResponse.headers.get('livepeer-playback-url')?.replace('fra-ai-mediamtx-0.livepeer.com', 'ai.livepeer.com');
-            if (!whepUrl) throw new Error('Header Location mancante in WHIP.');
+            if (!whepUrl) throw new Error('Header livepeer-playback-url mancante nella risposta WHIP.');
+            console.log(`Fase 3: WHEP URL ottenuto: ${whepUrl}`);
+
+            await fetch('/update-whep-url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId, whepUrl })
+            });
+            console.log("WHEP URL salvato nel database del server.");
+
+            // 5. Completa la connessione e avvia il playback
             const answerSdp = await whipResponse.text();
             await peerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
-            document.dispatchEvent(new Event('streamingReady')); // Annuncia che lo stream è pronto!
+            
+            console.log(`✅ Connessione WHIP stabilita con successo.`);
             updateBtn.disabled = false;
+
             setTimeout(() => {
                 handleStartPlayback(originalPlaybackVideo, whepUrl);
-                socket.emit('share-url', { sessionId: sessionId, url: whepUrl }, () => {
-                    preloadNextStream();
-                });
+                preloadNextStream();
             }, 1500);
-        } catch (error) { console.error('Errore avvio stream:', error); }
+
+        } catch (error) {
+            console.error('Errore durante getOrCreateStreamSession:', error);
+        }
     }
-    
+
+
     async function handleUpdateParams(prompt) {
         if (!streamId) return;
         updateBtn.disabled = true;
@@ -173,7 +246,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- NUOVE FUNZIONI PER CHIAMATA AUDIO DINAMICA ---
-    
+
     function hangUp() {
         if (audioPeerConnection) {
             console.log("📞 Riaggancio la chiamata con", currentAudioPartnerSocketId);
@@ -194,7 +267,7 @@ window.addEventListener('DOMContentLoaded', () => {
         hangUp(); // <-- PRIMA AZIONE: chiudi la chiamata corrente
         if (isTransitioning) return;
         isTransitioning = true;
-        
+
         const currentSlide = document.querySelector('.slide.is-visible');
         const nextSlide = document.querySelector('.slide:not(.is-visible)');
 
@@ -236,13 +309,14 @@ window.addEventListener('DOMContentLoaded', () => {
                 remoteAudioEl.id = 'remote-audio';
                 remoteAudioEl.controls = true;
                 remoteAudioEl.autoplay = true;
+                remoteAudioEl.style.display = 'none';
                 document.body.appendChild(remoteAudioEl);
             }
             if (remoteAudioEl.srcObject !== event.streams[0]) {
                 remoteAudioEl.srcObject = event.streams[0];
             }
         };
-        
+
         audioPeerConnection.onicecandidate = (event) => {
             if (event.candidate && currentAudioPartnerSocketId) {
                 console.log(`✉️ Invio candidato ICE a ${currentAudioPartnerSocketId}`);
@@ -265,7 +339,9 @@ window.addEventListener('DOMContentLoaded', () => {
                 localAudioStream = new MediaStream(cameraStream.getAudioTracks());
                 if (canvasContainer) canvasContainer.style.display = 'none';
                 document.getElementById('local-video-preview').srcObject = cameraStream;
-                await startLivepeerStream(cameraStream);
+                
+                await getOrCreateStreamSession(cameraStream);
+
             } catch (err) { console.error("Accesso camera/microfono fallito:", err); }
         } else {
             if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
@@ -273,16 +349,16 @@ window.addEventListener('DOMContentLoaded', () => {
             if (canvasContainer) canvasContainer.style.display = 'block';
             const fluidCanvas = document.getElementById('fluidCanvas');
             const canvasStream = fluidCanvas.captureStream();
-            await startLivepeerStream(canvasStream);
+            await getOrCreateStreamSession(canvasStream);
         }
+
+        document.dispatchEvent(new CustomEvent('streamAudioReady', {
+            detail: { localAudioStream, peerConnection }
+        }))
     }
 
     // --- INIZIALIZZAZIONE E GESTIONE SOCKET ---
     function init() {
-        const preloadedVideoElement = document.querySelector('#random-stream-slide .playback-video');
-        if (!preloadedVideoElement) {
-            return console.error("FATAL: Elemento #random-stream-slide non trovato.");
-        }
         socket = io();
 
         socket.on('connect', () => {
@@ -292,37 +368,17 @@ window.addEventListener('DOMContentLoaded', () => {
             socket.emit('join-session', sessionId);
         });
 
-        // FLUSSO DI CHIAMATA DINAMICA
-        socket.on('random-stream-received', ({ sessionId: streamerSessionId, url }) => {
-            console.log(`🎥 Stream ricevuto dalla sessione ${streamerSessionId}.`);
-            hangUp(); 
 
-            const streamContainer = document.getElementById('stream-container');
-            if (isSliderViewActive && streamContainer) {
-                const newSlide = document.createElement('div');
-                newSlide.className = 'slide';
-                newSlide.innerHTML = `<video class="playback-video" autoplay playsinline muted></video><div class="loader"></div>`;
-                streamContainer.appendChild(newSlide);
-                handleStartPlayback(newSlide.querySelector('video'), url);
-            } else {
-                handleStartPlayback(preloadedVideoElement, url);
-            }
-            
-            if (localAudioStream) {
-                console.log(`➡️ Invio richiesta di chiamata alla sessione ${streamerSessionId}`);
-                socket.emit('request-audio-call', { streamerSessionId });
-            }
-        });
 
         socket.on('audio-request-received', async ({ visitorSocketId }) => {
             console.log(`📥 Ricevuta richiesta di chiamata da ${visitorSocketId}`);
             hangUp();
             currentAudioPartnerSocketId = visitorSocketId;
-            
+
             setupAudioPeerConnection();
             const offer = await audioPeerConnection.createOffer();
             await audioPeerConnection.setLocalDescription(offer);
-            
+
             console.log(`📤 Invio offerta a ${visitorSocketId}`);
             socket.emit('audio-offer', { offer, targetSocketId: visitorSocketId });
         });
@@ -347,9 +403,9 @@ window.addEventListener('DOMContentLoaded', () => {
                 await audioPeerConnection.setRemoteDescription(new RTCSessionDescription(answer));
             }
         });
-        
+
         socket.on('audio-ice-candidate', async (candidate) => {
-             if (audioPeerConnection && candidate) {
+            if (audioPeerConnection && candidate) {
                 try {
                     await audioPeerConnection.addIceCandidate(candidate);
                 } catch (e) {
@@ -363,17 +419,12 @@ window.addEventListener('DOMContentLoaded', () => {
             hangUp();
         });
 
-        // Gestione eventi non legati alla chiamata
-        socket.on('no-random-stream-found', () => { 
-            console.log("Nessun altro stream trovato dal server.");
-        });
-
         originalPlaybackVideo.addEventListener('canplay', () => document.getElementById('loader').style.display = 'none');
         originalPlaybackVideo.addEventListener('playing', () => document.getElementById('loader').style.display = 'none');
         originalPlaybackVideo.addEventListener('waiting', () => document.getElementById('loader').style.display = 'block');
 
         updateBtn.addEventListener('click', () => handleUpdateParams());
-        
+
         promptInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !updateBtn.disabled) {
                 e.preventDefault();
