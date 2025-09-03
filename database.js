@@ -129,5 +129,15 @@ export async function getRandomActiveStream(db, excludeSessionId) {
     return db.get(
         `SELECT sessionId, whepUrl FROM sessions WHERE whepUrl IS NOT NULL AND isActive = 1 AND sessionId != ? ORDER BY RANDOM() LIMIT 1`,
         excludeSessionId
-    );
+    );  
+}
+
+export async function getStreamIdBySessionId(db, sessionId) {
+  try {
+    const result = await db.get('SELECT streamId FROM sessions WHERE sessionId = ?', sessionId);
+    return result ? result.streamId : null;
+  } catch (err) {
+    console.error("Errore DB [getStreamIdBySessionId]:", err.message);
+    throw err;
+  }
 }

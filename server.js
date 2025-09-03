@@ -9,14 +9,14 @@ import { dirname } from 'path';
 import lunaRouter from './luna.router.js';
 
 // Importa sia il setup che le nuove funzioni di query
-import { 
-    setupDatabase, 
-    createSession,
-    getSessionForWhip,
-    saveWhipDetails,
-    saveWhepUrlDetails,
-    updateDbParticipantCount,
-    getRandomActiveStream
+import {
+  setupDatabase,
+  createSession,
+  getSessionForWhip,
+  saveWhipDetails,
+  saveWhepUrlDetails,
+  updateDbParticipantCount,
+  getRandomActiveStream
 } from './database.js';
 
 dotenv.config();
@@ -27,6 +27,10 @@ const API_KEY = "sk_iK9uX4DPSmmGekB8McXnJGEKB3wWWozjtKKjUKa3WBVirYxMtXL5GLrZiTJZ
 const API_BASE_URL = "https://api.daydream.live";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const PIPELINE_ID = "pip_qpUgXycjWF6YMeSL";
+const DEFAULT_PIPELINE_PARAMS = { "model_id": "stabilityai/sd-turbo", "prompt": "describe human beings.", "negative_prompt": "blurry, low quality, flat, 2d", "num_inference_steps": 50, "seed": 42, "t_index_list": [2, 4, 6], "controlnets": [{ "conditioning_scale": 0.4, "enabled": true, "model_id": "thibaud/controlnet-sd21-openpose-diffusers", "preprocessor": "pose_tensorrt" }, { "conditioning_scale": 0.14, "enabled": true, "model_id": "thibaud/controlnet-sd21-hed-diffusers", "preprocessor": "soft_edge" }, { "conditioning_scale": 0.27, "enabled": true, "model_id": "thibaud/controlnet-sd21-canny-diffusers", "preprocessor": "canny", "preprocessor_params": { "high_threshold": 200, "low_threshold": 100 } }, { "conditioning_scale": 0.34, "enabled": true, "model_id": "thibaud/controlnet-sd21-depth-diffusers", "preprocessor": "depth_tensorrt" }, { "conditioning_scale": 0.66, "enabled": true, "model_id": "thibaud/controlnet-sd21-color-diffusers", "preprocessor": "passthrough" }] };
+
+
 if (!OPENAI_API_KEY) {
   throw new Error('missing OPENAI_API_KEY')
 }
@@ -39,132 +43,176 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"]
   }
 });
-
+function generateSessionId(length = 6) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
 app.use(express.json());
 app.use(express.static("public"));
 
 // --- ENDPOINT REST ---
 
 app.post('/stream-session', async (req, res) => {
-    const { sessionId, pipeline_params } = req.body;
-    if (!sessionId || !pipeline_params) {
-        return res.status(400).json({ error: "sessionId e pipeline_params sono obbligatori." });
+  let { sessionId } = req.body;
+  if (!sessionId) sessionId = generateSessionId(6)
+  try {
+    await createSession(db, sessionId);
+    const existingSession = await getSessionForWhip(db, sessionId);
+
+    if (existingSession) {
+      console.log(`✅ Trovata sessione WHIP esistente per ${sessionId}.`);
+      return res.json(existingSession);
     }
-    try {
-        await createSession(db, sessionId);
-        const existingSession = await getSessionForWhip(db, sessionId);
 
-        if (existingSession) {
-            console.log(`✅ Trovata sessione WHIP esistente per ${sessionId}.`);
-            return res.json(existingSession);
-        }
+    console.log(`🆕 Creazione nuovo stream su Livepeer per ${sessionId}...`);
+    const createStreamResponse = await fetch(`${API_BASE_URL}/v1/streams`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: `stream-${sessionId}`, 
+                              pipeline_id: PIPELINE_ID, 
+                              pipeline_params: DEFAULT_PIPELINE_PARAMS 
+                            })
+    });
 
-        console.log(`🆕 Creazione nuovo stream su Livepeer per ${sessionId}...`);
-        const createStreamResponse = await fetch(`${API_BASE_URL}/v1/streams`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: `stream-${sessionId}`, ...pipeline_params })
-        });
-
-        const streamData = await createStreamResponse.json();
-        if (!createStreamResponse.ok) {
-            console.error("[DEBUG] Risposta di errore da Livepeer:", JSON.stringify(streamData, null, 2));
-            throw new Error(`API Error Livepeer: ${createStreamResponse.status} - ${streamData.error || 'Errore sconosciuto'}`);
-        }
-        
-        const { id: streamId, whip_url: whipUrl } = streamData;
-        if (!whipUrl) {
-            console.error("[DEBUG] Risposta Livepeer senza whip_url:", JSON.stringify(streamData, null, 2));
-            throw new Error('whip_url mancante nella risposta di Livepeer.');
-        }
-
-        await saveWhipDetails(db, sessionId, streamId, whipUrl);
-        res.json({ streamId, whipUrl });
-
-    } catch (error) {
-        console.error(`❌ Errore API /stream-session:`, error);
-        res.status(500).json({ error: "Errore durante la creazione dello stream." });
+    const streamData = await createStreamResponse.json();
+    if (!createStreamResponse.ok) {
+      console.error("[DEBUG] Risposta di errore da Livepeer:", JSON.stringify(streamData, null, 2));
+      throw new Error(`API Error Livepeer: ${createStreamResponse.status} - ${streamData.error || 'Errore sconosciuto'}`);
     }
+
+    const { id: streamId, whip_url: whipUrl } = streamData;
+    if (!whipUrl) {
+      console.error("[DEBUG] Risposta Livepeer senza whip_url:", JSON.stringify(streamData, null, 2));
+      throw new Error('whip_url mancante nella risposta di Livepeer.');
+    }
+
+    await saveWhipDetails(db, sessionId, streamId, whipUrl);
+    res.json({ streamId, sessionId, whipUrl });
+  } catch (error) {
+    console.error(`❌ Errore API /stream-session:`, error);
+    res.status(500).json({ error: "Errore durante la creazione dello stream." });
+  }
 });
 
 app.post('/update-whep-url', async (req, res) => {
-    const { sessionId, whepUrl } = req.body;
-    if (!sessionId || !whepUrl) {
-        return res.status(400).json({ error: "sessionId e whepUrl sono obbligatori." });
+  const { sessionId, whepUrl } = req.body;
+  if (!sessionId || !whepUrl) {
+    return res.status(400).json({ error: "sessionId e whepUrl sono obbligatori." });
+  }
+  try {
+    await saveWhepUrlDetails(db, sessionId, whepUrl);
+    res.status(200).json({ message: "URL WHEP aggiornato con successo." });
+  } catch (error) {
+    console.error(`❌ Errore API /update-whep-url:`, error);
+    res.status(500).json({ error: "Errore durante il salvataggio dell'URL WHEP." });
+  }
+});
+app.post('/update-stream-params', async (req, res) => {
+    const { sessionId, prompt } = req.body;
+    if (!sessionId || !prompt) {
+        return res.status(400).json({ error: "sessionId e prompt sono obbligatori." });
     }
+
     try {
-        await saveWhepUrlDetails(db, sessionId, whepUrl);
-        res.status(200).json({ message: "URL WHEP aggiornato con successo." });
-    } catch (error){
-        console.error(`❌ Errore API /update-whep-url:`, error);
-        res.status(500).json({ error: "Errore durante il salvataggio dell'URL WHEP." });
+        const streamId = await getStreamIdBySessionId(db, sessionId);
+        if (!streamId) {
+            return res.status(404).json({ error: "Nessun streamId attivo trovato per questa sessione." });
+        }
+
+        console.log(`[DEBUG] Aggiornamento stream ${streamId} per sessione ${sessionId}`);
+
+        const paramsPayload = { "params": { "prompt": prompt } };
+        const response = await fetch(`${API_BASE_URL}/v1/streams/${streamId}`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(paramsPayload)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error("[DEBUG] Errore da Livepeer durante l'aggiornamento:", JSON.stringify(errorData, null, 2));
+            throw new Error(`API Update Error: ${response.statusText}`);
+        }
+
+        res.status(200).json({ message: "Parametri dello stream aggiornati con successo." });
+
+    } catch (error) {
+        console.error(`❌ Errore API /update-stream-params:`, error);
+        res.status(500).json({ error: "Errore durante l'aggiornamento dei parametri dello stream." });
     }
 });
 
 app.get('/random-stream', async (req, res) => {
-    const { excludeSessionId } = req.query;
-    if (!excludeSessionId) {
-        return res.status(400).json({ error: "Il parametro excludeSessionId è obbligatorio." });
+  const { excludeSessionId } = req.query;
+  if (!excludeSessionId) {
+    return res.status(400).json({ error: "Il parametro excludeSessionId è obbligatorio." });
+  }
+  try {
+    const randomSession = await getRandomActiveStream(db, excludeSessionId);
+    if (randomSession && randomSession.whepUrl) {
+      res.json({ sessionId: randomSession.sessionId, url: randomSession.whepUrl });
+    } else {
+      res.status(404).json({ message: "Nessun altro stream attivo trovato." });
     }
-    try {
-        const randomSession = await getRandomActiveStream(db, excludeSessionId);
-        if (randomSession && randomSession.whepUrl) {
-            res.json({ sessionId: randomSession.sessionId, url: randomSession.whepUrl });
-        } else {
-            res.status(404).json({ message: "Nessun altro stream attivo trovato." });
-        }
-    } catch (err) {
-        console.error("Errore durante la ricerca di uno stream casuale:", err.message);
-        res.status(500).json({ error: "Errore interno del server." });
-    }
+  } catch (err) {
+    console.error("Errore durante la ricerca di uno stream casuale:", err.message);
+    res.status(500).json({ error: "Errore interno del server." });
+  }
 });
 
 
 // --- GESTIONE SOCKET.IO ---
 io.on('connection', (socket) => {
-    socket.on('join-session', (sessionId) => {
-        socket.join(sessionId);
-        console.log(`🔗 Utente ${socket.id} si è unito alla sessione ${sessionId}`);
-        const room = io.sockets.adapter.rooms.get(sessionId);
-        updateDbParticipantCount(db, sessionId, room ? room.size : 0);
-    });
-    
-    // --- LOGICA PER CHIAMATA AUDIO DINAMICA ---
-    socket.on('request-audio-call', ({ streamerSessionId }) => {
-        console.log(`📞 Richiesta di chiamata da ${socket.id} verso la sessione ${streamerSessionId}`);
-        socket.to(streamerSessionId).emit('audio-request-received', { visitorSocketId: socket.id });
-    });
-    socket.on('audio-offer', ({ offer, targetSocketId }) => {
-        console.log(`📤 Inoltro offerta da ${socket.id} a ${targetSocketId}`);
-        socket.to(targetSocketId).emit('audio-offer', { offer, streamerSocketId: socket.id });
-    });
-    socket.on('audio-answer', ({ answer, targetSocketId }) => {
-        console.log(`✅ Inoltro risposta da ${socket.id} a ${targetSocketId}`);
-        socket.to(targetSocketId).emit('audio-answer', answer);
-    });
-    socket.on('audio-ice-candidate', ({ candidate, targetSocketId }) => {
-        socket.to(targetSocketId).emit('audio-ice-candidate', candidate);
-    });
-    socket.on('hang-up', ({ targetSocketId }) => {
-        console.log(`👋 ${socket.id} ha riagganciato con ${targetSocketId}`);
-        socket.to(targetSocketId).emit('hang-up');
-    });
+  socket.on('join-session', (sessionId) => {
+    socket.join(sessionId);
+    console.log(`🔗 Utente ${socket.id} si è unito alla sessione ${sessionId}`);
+    const room = io.sockets.adapter.rooms.get(sessionId);
+    updateDbParticipantCount(db, sessionId, room ? room.size : 0);
+  });
 
-    // --- ALTRI GESTORI SOCKET ---
-    socket.on('share-user-message', ({ sessionId, text, interpolation }) => {
-        console.log(`🚀 Messaggio utente: ${text}`);
-        socket.to(sessionId).emit('user-message-received', { text, interpolation });
+  // --- LOGICA PER CHIAMATA AUDIO DINAMICA ---
+  socket.on('request-audio-call', ({ streamerSessionId }) => {
+    console.log(`📞 Richiesta di chiamata da ${socket.id} verso la sessione ${streamerSessionId}`);
+    socket.to(streamerSessionId).emit('audio-request-received', { visitorSocketId: socket.id });
+  });
+  socket.on('audio-offer', ({ offer, targetSocketId }) => {
+    console.log(`📤 Inoltro offerta da ${socket.id} a ${targetSocketId}`);
+    socket.to(targetSocketId).emit('audio-offer', { offer, streamerSocketId: socket.id });
+  });
+  socket.on('audio-answer', ({ answer, targetSocketId }) => {
+    console.log(`✅ Inoltro risposta da ${socket.id} a ${targetSocketId}`);
+    socket.to(targetSocketId).emit('audio-answer', answer);
+  });
+  socket.on('audio-ice-candidate', ({ candidate, targetSocketId }) => {
+    socket.to(targetSocketId).emit('audio-ice-candidate', candidate);
+  });
+  socket.on('hang-up', ({ targetSocketId }) => {
+    console.log(`👋 ${socket.id} ha riagganciato con ${targetSocketId}`);
+    socket.to(targetSocketId).emit('hang-up');
+  });
+
+  // --- ALTRI GESTORI SOCKET ---
+  socket.on('share-user-message', ({ sessionId, text, interpolation }) => {
+    console.log(`🚀 Messaggio utente: ${text}`);
+    socket.to(sessionId).emit('user-message-received', { text, interpolation });
+  });
+
+  socket.on('disconnecting', () => {
+    socket.rooms.forEach(sessionId => {
+      if (sessionId !== socket.id) {
+        const room = io.sockets.adapter.rooms.get(sessionId);
+        const currentCount = room ? room.size : 1;
+        updateDbParticipantCount(db, sessionId, currentCount - 1);
+      }
     });
-    
-    socket.on('disconnecting', () => {
-        socket.rooms.forEach(sessionId => {
-            if (sessionId !== socket.id) {
-                const room = io.sockets.adapter.rooms.get(sessionId);
-                const currentCount = room ? room.size : 1;
-                updateDbParticipantCount(db, sessionId, currentCount - 1);
-            }
-        });
-    });
+  });
 });
 
 // --- ROUTE EXPRESS STATICHE ---

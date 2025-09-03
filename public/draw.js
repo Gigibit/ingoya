@@ -1,20 +1,12 @@
 // o gioia, ch'io conobbi, esser amato amando!
 window.addEventListener('DOMContentLoaded', () => {
-    function generateSessionId(length = 6) {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let result = '';
-        for (let i = 0; i < length; i++) {
-            result += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return result;
-    }
 
     // --- VARIABILI GLOBALI ---
     let socket = null;
     let currentAudioPartnerSocketId = null; // ID del socket dell'utente con cui stiamo parlando
     let touchStartY = 0;
     const urlParams = new URLSearchParams(window.location.search);
-    const sessionId = urlParams.get('sessionId') || generateSessionId();
+    let sessionId = urlParams.get('sessionId');
     let isSliderViewActive = false;
     let canExplore = false;
     let isTransitioning = false;
@@ -27,16 +19,11 @@ window.addEventListener('DOMContentLoaded', () => {
     const promptInput = document.getElementById('prompt');
     const cameraButton = document.getElementById('camera-button');
 
-    // --- COSTANTI API (invariate) ---
-    const API_KEY = "sk_iK9uX4DPSmmGekB8McXnJGEKB3wWWozjtKKjUKa3WBVirYxMtXL5GLrZiTJZQ8Pb";
-    const API_BASE_URL = "https://api.daydream.live";
-    const PIPELINE_ID = "pip_qpUgXycjWF6YMeSL";
-
     // --- VARIABILI DI STATO (invariate) ---
     let streamId = null;
     let peerConnection = null;
     let isCameraActive = false;
-    let cameraStream = null;
+    let localStream = null;
     // --- MODIFICA #2: Logica estratta in una nuova funzione ---
     function handleNewRandomStream(streamerSessionId, url) {
         console.log(`🎥 Stream ricevuto dalla sessione ${streamerSessionId}.`);
@@ -171,38 +158,33 @@ window.addEventListener('DOMContentLoaded', () => {
 
         console.log(`Fase 1: Ottenendo i dati WHIP dal server per ${sessionId}...`);
         try {
-            // 1. Definisci i parametri della pipeline
-            const pipeline_params = {
-                "pipeline_id": PIPELINE_ID,
-                "pipeline_params": { "model_id": "stabilityai/sd-turbo", "prompt": "describe human beings.", "negative_prompt": "blurry, low quality, flat, 2d", "num_inference_steps": 50, "seed": 42, "t_index_list": [2, 4, 6], "controlnets": [{ "conditioning_scale": 0.4, "enabled": true, "model_id": "thibaud/controlnet-sd21-openpose-diffusers", "preprocessor": "pose_tensorrt" }, { "conditioning_scale": 0.14, "enabled": true, "model_id": "thibaud/controlnet-sd21-hed-diffusers", "preprocessor": "soft_edge" }, { "conditioning_scale": 0.27, "enabled": true, "model_id": "thibaud/controlnet-sd21-canny-diffusers", "preprocessor": "canny", "preprocessor_params": { "high_threshold": 200, "low_threshold": 100 } }, { "conditioning_scale": 0.34, "enabled": true, "model_id": "thibaud/controlnet-sd21-depth-diffusers", "preprocessor": "depth_tensorrt" }, { "conditioning_scale": 0.66, "enabled": true, "model_id": "thibaud/controlnet-sd21-color-diffusers", "preprocessor": "passthrough" }] }
-            };
-
             // 2. Chiama il server per ottenere il WHIP URL
             const response = await fetch('/stream-session', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId, pipeline_params })
+                headers: { 'Content-Type': 'application/json' }
             });
             if (!response.ok) throw new Error(`Errore dal server /stream-session: ${response.statusText}`);
-            const sessionData = await response.json(); // { streamId, whipUrl }
+            const sessionData = await response.json();
+            console.log(sessionData)
             streamId = sessionData.streamId;
+            sessionId = sessionData.sessionId
 
             // 3. Negozia con Livepeer per ottenere il WHEP URL
             console.log(`Fase 2: Connessione a Livepeer tramite WHIP a ${sessionData.whipUrl}`);
             if (peerConnection) peerConnection.close();
             peerConnection = new RTCPeerConnection();
             sourceStream.getTracks().forEach(track => peerConnection.addTrack(track, sourceStream));
-            
+
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
-            
+
             const whipResponse = await fetch(sessionData.whipUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/sdp' },
                 body: peerConnection.localDescription.sdp
             });
             if (whipResponse.status !== 201) throw new Error(`Connessione WHIP fallita: ${whipResponse.statusText}`);
-            
+
             // 4. Estrai il WHEP URL e salvalo sul nostro server
             const whepUrl = whipResponse.headers.get('livepeer-playback-url')?.replace('fra-ai-mediamtx-0.livepeer.com', 'ai.livepeer.com');
             if (!whepUrl) throw new Error('Header livepeer-playback-url mancante nella risposta WHIP.');
@@ -218,7 +200,7 @@ window.addEventListener('DOMContentLoaded', () => {
             // 5. Completa la connessione e avvia il playback
             const answerSdp = await whipResponse.text();
             await peerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
-            
+
             console.log(`✅ Connessione WHIP stabilita con successo.`);
             updateBtn.disabled = false;
 
@@ -233,17 +215,32 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    async function handleUpdateParams(prompt) {
-        if (!streamId) return;
+    async function handleUpdateParams(promptText) {
+        const prompt = promptText || promptInput.value;
+        if (!prompt) return; // Non inviare se il prompt è vuoto
+
         updateBtn.disabled = true;
         try {
-            const paramsPayload = { "params": { "prompt": prompt || promptInput.value } };
-            const response = await fetch(`${API_BASE_URL}/v1/streams/${streamId}`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${API_KEY}`, 'x-client-source': 'streamdiffusion-web', 'Content-Type': 'application/json' }, body: JSON.stringify(paramsPayload) });
-            if (!response.ok) throw new Error(`API Update Error: ${response.statusText}`);
+            const response = await fetch('/update-stream-params', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId, prompt }) // Invia sessionId e il prompt al nostro server
+            });
+
+            if (!response.ok) {
+                throw new Error(`Errore dal server /update-stream-params: ${response.statusText}`);
+            }
+            
+            console.log("Parametri aggiornati con successo tramite il server.");
             promptInput.value = '';
-            updateBtn.classList.toggle('has-text', false);
-        } catch (error) { console.error('Error updating parameters:', error); }
-        finally { updateBtn.disabled = false; }
+            // Assicurati di aggiornare lo stato del pulsante (freccia -> microfono)
+            promptInput.dispatchEvent(new Event('input')); 
+
+        } catch (error) {
+            console.error('Errore durante l\'aggiornamento dei parametri:', error);
+        } finally {
+            updateBtn.disabled = false;
+        }
     }
 
     // --- NUOVE FUNZIONI PER CHIAMATA AUDIO DINAMICA ---
@@ -336,26 +333,26 @@ window.addEventListener('DOMContentLoaded', () => {
 
         if (isCameraActive) {
             try {
-                cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                localAudioStream = new MediaStream(cameraStream.getAudioTracks());
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                localAudioStream = new MediaStream(localStream.getAudioTracks());
                 if (canvasContainer) canvasContainer.style.display = 'none';
-                document.getElementById('local-video-preview').srcObject = cameraStream;
-                
-                await getOrCreateStreamSession(cameraStream);
-
+                document.getElementById('local-video-preview').srcObject = localStream;
             } catch (err) { console.error("Accesso camera/microfono fallito:", err); }
         } else {
-            if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+            if (localStream) localStream.getTracks().forEach(track => track.stop());
+            localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+
             document.getElementById('local-video-preview').srcObject = null;
             if (canvasContainer) canvasContainer.style.display = 'block';
             const fluidCanvas = document.getElementById('fluidCanvas');
-            const canvasStream = fluidCanvas.captureStream();
-            await getOrCreateStreamSession(canvasStream);
-        }
+            localStream = fluidCanvas.captureStream();
 
+        }
         document.dispatchEvent(new CustomEvent('streamAudioReady', {
             detail: { localAudioStream, peerConnection }
         }))
+        return localStream
+
     }
 
     // --- INIZIALIZZAZIONE E GESTIONE SOCKET ---
@@ -440,14 +437,18 @@ window.addEventListener('DOMContentLoaded', () => {
             console.log('Updating with', e.detail.interpolation);
             handleUpdateParams(e.detail.interpolation);
         });
-
-        cameraButton.addEventListener('click', toggleVideoSource);
-
-        setTimeout(() => {
-            cameraButton.click();
-        }, 1000);
     }
 
-    init();
+    async function main() {
+        localStream = await toggleVideoSource()
+        await getOrCreateStreamSession(localStream);
+        init()
+    }
+
+    cameraButton.addEventListener('click', main);
+
+    setTimeout(() => {
+        cameraButton.click();
+    }, 1000);
 });
 
