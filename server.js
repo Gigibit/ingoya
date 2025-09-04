@@ -29,7 +29,7 @@ const DAYDREAM_API_BASE_URL = "https://api.daydream.live";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const PIPELINE_ID = "pip_qpUgXycjWF6YMeSL";
-const DEFAULT_PIPELINE_PARAMS = { "model_id": "stabilityai/sd-turbo", "prompt": "describe human beings.", "negative_prompt": "blurry, low quality, flat, 2d", "num_inference_steps": 50, "seed": 42, "t_index_list": [2, 4, 6], "controlnets": [{ "conditioning_scale": 0.4, "enabled": true, "model_id": "thibaud/controlnet-sd21-openpose-diffusers", "preprocessor": "pose_tensorrt" }, { "conditioning_scale": 0.14, "enabled": true, "model_id": "thibaud/controlnet-sd21-hed-diffusers", "preprocessor": "soft_edge" }, { "conditioning_scale": 0.27, "enabled": true, "model_id": "thibaud/controlnet-sd21-canny-diffusers", "preprocessor": "canny", "preprocessor_params": { "high_threshold": 200, "low_threshold": 100 } }, { "conditioning_scale": 0.34, "enabled": true, "model_id": "thibaud/controlnet-sd21-depth-diffusers", "preprocessor": "depth_tensorrt" }, { "conditioning_scale": 0.66, "enabled": true, "model_id": "thibaud/controlnet-sd21-color-diffusers", "preprocessor": "passthrough" }] };
+const DEFAULT_PIPELINE_PARAMS = { "model_id": "stabilityai/sd-turbo", "prompt": "describe human beings. REAL, NOT drawn, NOT blurry, NOT low quality, NOT flat, NOT 2d", "negative_prompt": "blurry, low quality, flat, 2d", "num_inference_steps": 50, "seed": 42, "t_index_list": [2, 4, 6], "controlnets": [{ "conditioning_scale": 0.4, "enabled": true, "model_id": "thibaud/controlnet-sd21-openpose-diffusers", "preprocessor": "pose_tensorrt" }, { "conditioning_scale": 0.14, "enabled": true, "model_id": "thibaud/controlnet-sd21-hed-diffusers", "preprocessor": "soft_edge" }, { "conditioning_scale": 0.27, "enabled": true, "model_id": "thibaud/controlnet-sd21-canny-diffusers", "preprocessor": "canny", "preprocessor_params": { "high_threshold": 200, "low_threshold": 100 } }, { "conditioning_scale": 0.34, "enabled": true, "model_id": "thibaud/controlnet-sd21-depth-diffusers", "preprocessor": "depth_tensorrt" }, { "conditioning_scale": 0.66, "enabled": true, "model_id": "thibaud/controlnet-sd21-color-diffusers", "preprocessor": "passthrough" }] };
 
 
 if (!OPENAI_API_KEY) {
@@ -127,7 +127,7 @@ app.post('/update-stream-params', async (req, res) => {
 
         console.log(`[DEBUG] Aggiornamento stream ${streamId} per sessione ${sessionId}`);
 
-        const paramsPayload = { "params": { "prompt": prompt } };
+        const paramsPayload = { "params": { "prompt": prompt + '. REAL, NOT drawn, NOT blurry, NOT low quality, NOT flat, NOT 2d"' } };
         const response = await fetch(`${DAYDREAM_API_BASE_URL}/v1/streams/${streamId}`, {
             method: 'PATCH',
             headers: {

@@ -40,7 +40,7 @@ video::-webkit-media-controls { display: none; }
 
 /* Contenitore Video */
 #video-container {
-    position: relative;
+    /* position: relative; */
     width: 100%;
     flex-grow: 1;
     min-height: 0;
@@ -64,9 +64,10 @@ video::-webkit-media-controls { display: none; }
     z-index: 2;
     opacity: 1;
     transition: opacity 1.5s ease-out;
+    transform: translateZ(0);
 }
 
-#local-preview-overlay.fade-out {
+.fade-out {
     opacity: 0;
     pointer-events: none;
 }
@@ -83,6 +84,9 @@ video::-webkit-media-controls { display: none; }
     align-items: flex-end;
     gap: 1.5rem;
     padding-bottom: 1rem; /* Aggiunto padding per più respiro */
+    transition: opacity 1.5s ease-in-out;
+    z-index: 9;
+
 }
 
 .prompt-wrapper {
@@ -192,6 +196,8 @@ video::-webkit-media-controls { display: none; }
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
     z-index: 9999;
     animation: pip-pop 0.5s ease forwards;
+    cursor: pointer;
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes pip-pop {
@@ -357,7 +363,6 @@ body.slider-view-active {
     inset: 12px; /* padding interno rispetto al loader */
     border-radius: calc(var(--border-radius) - 12px);
     overflow: hidden;
-    background: #000; /* fallback */
     z-index: 1;
 }
 
@@ -371,4 +376,38 @@ body.slider-view-active {
     object-fit: cover;   /* riempie senza bande */
     object-position: center;
     border-radius: inherit;
+}
+
+/* Quando l'overlay è attivo, i controlli tornano visibili */
+body.slider-view-active.config-overlay-active #controls-section {
+    z-index: 10001; 
+    bottom: 0;
+    margin: 0 auto;
+    left: 0;
+    right: 0;
+    position: absolute;
+    opacity: 1;
+}
+
+/* Il video si sposta al centro e si ingrandisce */
+body.slider-view-active.config-overlay-active #playback-video.mini-video {
+    width: 60vw;
+    max-width: 800px;
+    height: auto;
+    max-height: 60vh;
+    transform: translate(-50%, -50%);
+    z-index: 10000;
+    right: 0;
+    left: 0;
+    margin: 0 auto;
+    top: 15px;
+}
+
+.header-title{
+    text-align: center;
+    color: var(--accent-color);
+    z-index: 9999999999;
+    opacity: 1;
+    font-size: 100px;
+    transition: opacity 1.5s ease-out;
 }

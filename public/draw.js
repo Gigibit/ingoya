@@ -9,9 +9,10 @@ class AppController {
         this.sessionId = this._generateSessionId();
         this.currentAudioPartnerSocketId = null;
         this.isSliderViewActive = false;
+        this.isConfigOverlayActive = false; // Nuovo stato per la vista overlay
         this.canExplore = false;
         this.isTransitioning = false;
-        
+
         // Connessioni WebRTC
         this.livepeerConnection = null;
         this.p2pAudioConnection = null;
@@ -26,9 +27,11 @@ class AppController {
         this.updateBtn = document.getElementById('update-params-btn');
         this.promptInput = document.getElementById('prompt');
         this.cameraButton = document.getElementById('camera-button');
+        this.controlsSection = document.getElementById('controls-section');
 
         // Avvio
         this._init();
+        document.getElementById('main-title').style.opacity = '0'
     }
 
     /**
@@ -61,6 +64,14 @@ class AppController {
         this.cameraButton.addEventListener('click', () => this.main());
         this.updateBtn.addEventListener('click', () => this.handleUpdateParams());
 
+        // --- MODIFICA: Il click sul video ora gestisce l'overlay ---
+        this.originalPlaybackVideo.addEventListener('click', () => {
+            if (this.isSliderViewActive) {
+                this.toggleConfigOverlay();
+            }
+        });
+        // --- FINE MODIFICA ---
+
         this.promptInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !this.updateBtn.disabled) {
                 e.preventDefault();
@@ -90,13 +101,10 @@ class AppController {
     _setupSocketListeners() {
         // Listener per la chat audio P2P
         this.socket.on('audio-request-received', async ({ visitorSocketId }) => {
-            // --- CORREZIONE #2: Prevenire chiamate ridondanti ---
             if (this.currentAudioPartnerSocketId === visitorSocketId) {
                 console.log(`⚠️ Richiesta di chiamata duplicata da ${visitorSocketId}, la ignoro.`);
                 return;
             }
-            // --- FINE CORREZIONE ---
-
             console.log(`📥 Ricevuta richiesta di chiamata da ${visitorSocketId}`);
             this.hangUp();
             this.currentAudioPartnerSocketId = visitorSocketId;
@@ -152,20 +160,17 @@ class AppController {
             if (isCameraActive) {
                 this.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 this.localAudioSubStream = new MediaStream(this.localStream.getAudioTracks());
-
-                console.log("Mostrando l'anteprima della camera locale nell'overlay...");
                 this.localPreviewOverlay.srcObject = this.localStream;
                 this.localPreviewOverlay.onloadedmetadata = () => {
                     this.localPreviewOverlay.play().catch(err => {
                         console.warn("Autoplay bloccato, in attesa di interazione:", err);
                     });
                 };
-                this.localPreviewOverlay.classList.remove('fade-out'); 
+                this.localPreviewOverlay.classList.remove('fade-out');
 
             } else {
                 if (this.localStream) this.localStream.getTracks().forEach(track => track.stop());
                 this.localAudioSubStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
                 if (canvasContainer) canvasContainer.style.display = 'block';
                 const fluidCanvas = document.getElementById('fluidCanvas');
                 const canvasStream = fluidCanvas.captureStream();
@@ -189,7 +194,6 @@ class AppController {
         streamContainer.appendChild(preloadedSlide);
         document.body.appendChild(streamContainer);
         this.originalPlaybackVideo.classList.add('mini-video');
-        document.getElementById('controls-section').style.display = 'none';
         document.body.appendChild(this.originalPlaybackVideo);
         this.preloadNextStream();
 
@@ -201,10 +205,25 @@ class AppController {
         }, { passive: false });
     }
 
+    // --- NUOVO METODO: Gestisce l'overlay di configurazione ---
+    toggleConfigOverlay() {
+        this.isConfigOverlayActive = !this.isConfigOverlayActive;
+        document.body.classList.toggle('config-overlay-active', this.isConfigOverlayActive);
+
+        if (this.isConfigOverlayActive) {
+            console.log("Entrata in modalità configurazione overlay.");
+            // Interrompe la chiamata audio per evitare di parlare mentre si scrive
+            this.hangUp();
+        } else {
+            console.log("Uscita dalla modalità configurazione overlay.");
+            // L'utente può scorrere per avviare una nuova chiamata
+        }
+    }
+
     enableExploreMode() {
         if (this.canExplore) return;
         this.canExplore = true;
-        
+
         const handleInitialScroll = (event) => {
             if (this.canExplore && !this.isSliderViewActive && event.deltaY > 0) {
                 event.preventDefault();
@@ -214,24 +233,28 @@ class AppController {
         };
 
         const handleInitialTouch = (e) => {
-             if (!this.canExplore || this.isSliderViewActive) return;
-             const touchStartY = e.changedTouches[0].screenY;
-             const onTouchEnd = (endEvent) => {
-                 const deltaY = touchStartY - endEvent.changedTouches[0].screenY;
-                 if (deltaY > 50) {
-                     window.removeEventListener('touchend', onTouchEnd);
-                     window.removeEventListener('wheel', handleInitialScroll);
-                     this.switchToSliderView();
-                 }
-             };
-             window.addEventListener('touchend', onTouchEnd, { passive: false });
+            if (!this.canExplore || this.isSliderViewActive) return;
+            const touchStartY = e.changedTouches[0].screenY;
+            const onTouchEnd = (endEvent) => {
+                const deltaY = touchStartY - endEvent.changedTouches[0].screenY;
+                if (deltaY > 50) {
+                    window.removeEventListener('touchend', onTouchEnd);
+                    window.removeEventListener('wheel', handleInitialScroll);
+                    this.switchToSliderView();
+                }
+            };
+            window.addEventListener('touchend', onTouchEnd, { passive: false });
         };
-        
+
         window.addEventListener('wheel', handleInitialScroll, { passive: false });
         window.addEventListener('touchstart', handleInitialTouch, { passive: false });
     }
 
     transitionToNextStream() {
+        // Se siamo in modalità overlay, esci prima di cambiare slide
+        if (this.isConfigOverlayActive) {
+            this.toggleConfigOverlay();
+        }
         this.hangUp();
         if (this.isTransitioning) return;
 
@@ -242,7 +265,7 @@ class AppController {
         }
 
         this.isTransitioning = true;
-        
+
         nextSlide.style.zIndex = '2';
         nextSlide.classList.add('is-visible');
         nextSlide.addEventListener('transitionend', () => {
@@ -251,16 +274,14 @@ class AppController {
                 nextSlide.style.zIndex = '1';
                 this.preloadNextStream();
                 this.isTransitioning = false;
-                
+
                 const streamerSessionId = nextSlide.dataset.sessionId;
                 if (this.localAudioSubStream && streamerSessionId) {
-                    console.log(`➡️ Transizione completa. Invio richiesta di chiamata alla sessione ${streamerSessionId}`);
                     this.socket.emit('request-audio-call', { streamerSessionId });
                 }
             }, 400);
         }, { once: true });
     }
-
 
     removeSmooth(element) {
         const start = performance.now();
@@ -296,9 +317,8 @@ class AppController {
     handleNewRandomStream(streamerSessionId, url) {
         const streamContainer = document.getElementById('stream-container');
         const preloadedVideoElement = document.querySelector('#random-stream-slide .playback-video');
-        
-        let targetSlide;
 
+        let targetSlide;
         if (this.isSliderViewActive && streamContainer) {
             const newSlide = document.createElement('div');
             newSlide.className = 'slide';
@@ -352,13 +372,14 @@ class AppController {
             await this.livepeerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
 
             this.updateBtn.disabled = false;
-            
             this.handleStartPlayback(this.originalPlaybackVideo, whepUrl);
-            this.enableExploreMode(); 
-
+            this.enableExploreMode();
         } catch (error) {
             console.error('Errore getOrCreateStreamSession:', error);
         }
+        document.dispatchEvent(new CustomEvent('streamAudioReady', {
+            detail: { localAudioStream: this.localAudioSubStream, peerConnection: this.livepeerConnection }
+        }));
     }
 
     handleStartPlayback(targetVideoElement, whepUrl) {
@@ -378,7 +399,11 @@ class AppController {
                         targetVideoElement.srcObject = event.streams[0];
                     }
 
-                    setTimeout(() => this.localPreviewOverlay.classList.add('fade-out'), 500);
+                    setTimeout(() => {
+                        this.localPreviewOverlay.addEventListener('transitionend', this.localPreviewOverlay.remove)
+                        this.localPreviewOverlay.style.opacity = '0';
+                    }, 1500);
+
 
                     if (targetVideoElement.id === 'playback-video') this.enableExploreMode();
                     if (targetVideoElement.reconnectTimeoutId) { clearTimeout(targetVideoElement.reconnectTimeoutId); targetVideoElement.reconnectTimeoutId = null; }
@@ -459,7 +484,7 @@ class AppController {
             this.p2pAudioConnection.close();
             this.p2pAudioConnection = null;
         }
-        
+
         const remoteAudioEl = document.getElementById('remote-audio');
         if (remoteAudioEl) {
             remoteAudioEl.remove();
