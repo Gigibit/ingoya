@@ -11,7 +11,7 @@ class AppController {
         this.isSliderViewActive = false;
         this.canExplore = false;
         this.isTransitioning = false;
-        this.pendingRemoteAudioStream = null;
+        
         // Connessioni WebRTC
         this.livepeerConnection = null;
         this.p2pAudioConnection = null;
@@ -90,6 +90,13 @@ class AppController {
     _setupSocketListeners() {
         // Listener per la chat audio P2P
         this.socket.on('audio-request-received', async ({ visitorSocketId }) => {
+            // --- CORREZIONE #2: Prevenire chiamate ridondanti ---
+            if (this.currentAudioPartnerSocketId === visitorSocketId) {
+                console.log(`⚠️ Richiesta di chiamata duplicata da ${visitorSocketId}, la ignoro.`);
+                return;
+            }
+            // --- FINE CORREZIONE ---
+
             console.log(`📥 Ricevuta richiesta di chiamata da ${visitorSocketId}`);
             this.hangUp();
             this.currentAudioPartnerSocketId = visitorSocketId;
@@ -146,17 +153,14 @@ class AppController {
                 this.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 this.localAudioSubStream = new MediaStream(this.localStream.getAudioTracks());
 
-                // --- MODIFICA CHIAVE: Usa l'overlay per l'anteprima ---
                 console.log("Mostrando l'anteprima della camera locale nell'overlay...");
                 this.localPreviewOverlay.srcObject = this.localStream;
-                this.localPreviewOverlay.play();
                 this.localPreviewOverlay.onloadedmetadata = () => {
                     this.localPreviewOverlay.play().catch(err => {
                         console.warn("Autoplay bloccato, in attesa di interazione:", err);
                     });
-                    this.localPreviewOverlay.classList.remove('fade-out');
                 };
-                this.localPreviewOverlay.classList.remove('fade-out'); // Assicura che sia visibile
+                this.localPreviewOverlay.classList.remove('fade-out'); 
 
             } else {
                 if (this.localStream) this.localStream.getTracks().forEach(track => track.stop());
@@ -200,73 +204,62 @@ class AppController {
     enableExploreMode() {
         if (this.canExplore) return;
         this.canExplore = true;
-
+        
         const handleInitialScroll = (event) => {
             if (this.canExplore && !this.isSliderViewActive && event.deltaY > 0) {
                 event.preventDefault();
                 window.removeEventListener('wheel', handleInitialScroll);
-                window.removeEventListener('touchend', handleInitialTouch); // cleanup
                 this.switchToSliderView();
             }
         };
 
         const handleInitialTouch = (e) => {
-            if (!this.canExplore || this.isSliderViewActive) return;
-            const touchStartY = e.changedTouches[0].screenY;
-            const onTouchEnd = (endEvent) => {
-                const deltaY = touchStartY - endEvent.changedTouches[0].screenY;
-                if (deltaY > 50) { // swipe verso l’alto
-                    window.removeEventListener('touchend', onTouchEnd);
-                    window.removeEventListener('wheel', handleInitialScroll);
-                    this.switchToSliderView();
-                }
-            };
-            window.addEventListener('touchend', onTouchEnd, { passive: false });
+             if (!this.canExplore || this.isSliderViewActive) return;
+             const touchStartY = e.changedTouches[0].screenY;
+             const onTouchEnd = (endEvent) => {
+                 const deltaY = touchStartY - endEvent.changedTouches[0].screenY;
+                 if (deltaY > 50) {
+                     window.removeEventListener('touchend', onTouchEnd);
+                     window.removeEventListener('wheel', handleInitialScroll);
+                     this.switchToSliderView();
+                 }
+             };
+             window.addEventListener('touchend', onTouchEnd, { passive: false });
         };
-
+        
         window.addEventListener('wheel', handleInitialScroll, { passive: false });
         window.addEventListener('touchstart', handleInitialTouch, { passive: false });
     }
 
-transitionToNextStream() {
-    this.hangUp();
-    if (this.isTransitioning) return;
+    transitionToNextStream() {
+        this.hangUp();
+        if (this.isTransitioning) return;
 
-    const currentSlide = document.querySelector('.slide.is-visible');
-    const nextSlide = document.querySelector('.slide:not(.is-visible)');
-    if (!currentSlide || !nextSlide || !nextSlide.querySelector('video')?.srcObject) {
-        return console.warn("Transizione annullata: video non pronto.");
-    }
+        const currentSlide = document.querySelector('.slide.is-visible');
+        const nextSlide = document.querySelector('.slide:not(.is-visible)');
+        if (!currentSlide || !nextSlide || !nextSlide.querySelector('video')?.srcObject) {
+            return console.warn("Transizione annullata: video non pronto.");
+        }
 
-    this.isTransitioning = true;
-
-    nextSlide.style.zIndex = '2';
-    nextSlide.classList.add('is-visible');
-    nextSlide.addEventListener('transitionend', () => {
-        this.removeSmooth(currentSlide);
-        setTimeout(() => {
-            nextSlide.style.zIndex = '1';
-            this.preloadNextStream();
-            this.isTransitioning = false;
-
-            // --- Avvia audio solo quando lo slide è visibile ---
-            if (this.pendingRemoteAudioStream) {
-                let remoteAudio = document.getElementById('remote-audio');
-                if (!remoteAudio) {
-                    remoteAudio = document.createElement('audio');
-                    remoteAudio.id = 'remote-audio';
-                    remoteAudio.autoplay = true;
-                    remoteAudio.style.display = 'none';
-                    document.body.appendChild(remoteAudio);
+        this.isTransitioning = true;
+        
+        nextSlide.style.zIndex = '2';
+        nextSlide.classList.add('is-visible');
+        nextSlide.addEventListener('transitionend', () => {
+            this.removeSmooth(currentSlide);
+            setTimeout(() => {
+                nextSlide.style.zIndex = '1';
+                this.preloadNextStream();
+                this.isTransitioning = false;
+                
+                const streamerSessionId = nextSlide.dataset.sessionId;
+                if (this.localAudioSubStream && streamerSessionId) {
+                    console.log(`➡️ Transizione completa. Invio richiesta di chiamata alla sessione ${streamerSessionId}`);
+                    this.socket.emit('request-audio-call', { streamerSessionId });
                 }
-                remoteAudio.srcObject = this.pendingRemoteAudioStream;
-                remoteAudio.play().catch(err => console.warn("Autoplay audio bloccato:", err));
-                this.pendingRemoteAudioStream = null;
-            }
-
-        }, 400);
-    }, { once: true });
-}
+            }, 400);
+        }, { once: true });
+    }
 
 
     removeSmooth(element) {
@@ -289,21 +282,11 @@ transitionToNextStream() {
             const response = await fetch(`/random-stream?excludeSessionId=${this.sessionId}`);
             if (response.status === 404) return console.log("Nessun altro stream trovato.");
             if (!response.ok) throw new Error(`Errore di rete: ${response.statusText}`);
-
             const data = await response.json();
-
-            // --- MODIFICA PER DEBUG ---
-            console.log("Dati ricevuti da /random-stream:", data); // Logghiamo l'intera risposta
-
             const nextStreamUrl = data.whepUrl;
-
-            // Aggiungiamo un controllo per assicurarsi che l'URL esista prima di procedere
             if (!nextStreamUrl) {
-                console.error("Errore critico: la risposta dal server non contiene un URL valido.", data);
-                return; // Interrompiamo l'esecuzione per prevenire l'errore.
+                return console.error("La risposta dal server non contiene un URL valido.", data);
             }
-            // --- FINE MODIFICA ---
-
             this.handleNewRandomStream(data.sessionId, nextStreamUrl);
         } catch (err) {
             console.error("Errore preloadNextStream:", err);
@@ -311,20 +294,23 @@ transitionToNextStream() {
     }
 
     handleNewRandomStream(streamerSessionId, url) {
-        this.hangUp();
         const streamContainer = document.getElementById('stream-container');
         const preloadedVideoElement = document.querySelector('#random-stream-slide .playback-video');
+        
+        let targetSlide;
+
         if (this.isSliderViewActive && streamContainer) {
             const newSlide = document.createElement('div');
             newSlide.className = 'slide';
+            newSlide.dataset.sessionId = streamerSessionId;
             newSlide.innerHTML = `<video class="playback-video" autoplay playsinline muted></video>`;
             streamContainer.appendChild(newSlide);
+            targetSlide = newSlide;
             this.handleStartPlayback(newSlide.querySelector('video'), url);
         } else {
+            targetSlide = document.getElementById('random-stream-slide');
+            targetSlide.dataset.sessionId = streamerSessionId;
             this.handleStartPlayback(preloadedVideoElement, url);
-        }
-        if (this.localAudioSubStream) {
-            this.socket.emit('request-audio-call', { streamerSessionId });
         }
     }
 
@@ -366,13 +352,10 @@ transitionToNextStream() {
             await this.livepeerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
 
             this.updateBtn.disabled = false;
-            setTimeout(() => {
-                this.handleStartPlayback(this.originalPlaybackVideo, whepUrl);
-                this.preloadNextStream();
-            }, 1500);
-            document.dispatchEvent(new CustomEvent('streamAudioReady', {
-                detail: { localAudioStream: this.localAudioSubStream, peerConnection: this.livepeerConnection }
-            }));
+            
+            this.handleStartPlayback(this.originalPlaybackVideo, whepUrl);
+            this.enableExploreMode(); 
+
         } catch (error) {
             console.error('Errore getOrCreateStreamSession:', error);
         }
@@ -395,8 +378,7 @@ transitionToNextStream() {
                         targetVideoElement.srcObject = event.streams[0];
                     }
 
-                    // --- MODIFICA CHIAVE: Avvia la dissolvenza dell'overlay ---
-                    setTimeout(() => this.localPreviewOverlay.classList.add('fade-out'), 2000);
+                    setTimeout(() => this.localPreviewOverlay.classList.add('fade-out'), 500);
 
                     if (targetVideoElement.id === 'playback-video') this.enableExploreMode();
                     if (targetVideoElement.reconnectTimeoutId) { clearTimeout(targetVideoElement.reconnectTimeoutId); targetVideoElement.reconnectTimeoutId = null; }
@@ -444,8 +426,19 @@ transitionToNextStream() {
         });
 
         this.p2pAudioConnection.ontrack = (event) => {
-            // memorizza lo stream ma non lo fai partire
-            this.pendingRemoteAudioStream = event.streams[0];
+            console.log(`🎤 Traccia audio ricevuta per ${this.currentAudioPartnerSocketId}`);
+            let remoteAudioEl = document.getElementById('remote-audio');
+            if (!remoteAudioEl) {
+                remoteAudioEl = document.createElement('audio');
+                remoteAudioEl.id = 'remote-audio';
+                remoteAudioEl.autoplay = true;
+                remoteAudioEl.style.display = 'none';
+                document.body.appendChild(remoteAudioEl);
+            }
+            if (remoteAudioEl.srcObject !== event.streams[0]) {
+                remoteAudioEl.srcObject = event.streams[0];
+                remoteAudioEl.play().catch(e => console.warn("Autoplay audio bloccato", e));
+            }
         };
 
         this.p2pAudioConnection.onicecandidate = (event) => {
@@ -466,6 +459,12 @@ transitionToNextStream() {
             this.p2pAudioConnection.close();
             this.p2pAudioConnection = null;
         }
+        
+        const remoteAudioEl = document.getElementById('remote-audio');
+        if (remoteAudioEl) {
+            remoteAudioEl.remove();
+        }
+
         this.currentAudioPartnerSocketId = null;
     }
 }
