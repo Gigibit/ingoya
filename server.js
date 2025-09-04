@@ -24,8 +24,8 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PORT = process.env.PORT || 3000;
-const API_KEY = "sk_iK9uX4DPSmmGekB8McXnJGEKB3wWWozjtKKjUKa3WBVirYxMtXL5GLrZiTJZQ8Pb";
-const API_BASE_URL = "https://api.daydream.live";
+const DAYDREAM_API_KEY = process.env.DAYDREAM_API_KEY;
+const DAYDREAM_API_BASE_URL = "https://api.daydream.live";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const PIPELINE_ID = "pip_qpUgXycjWF6YMeSL";
@@ -70,10 +70,11 @@ app.post('/stream-session', async (req, res) => {
     }
 
     console.log(`🆕 Creazione nuovo stream su Livepeer per ${sessionId}...`);
-    const createStreamResponse = await fetch(`${API_BASE_URL}/v1/streams`, {
+    const createStreamResponse = await fetch(`${DAYDREAM_API_BASE_URL}/v1/streams`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: `stream-${sessionId}`, 
+      headers: { 'Authorization': `Bearer ${DAYDREAM_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: `stream-${sessionId}`,
+                              prompt:
                               pipeline_id: PIPELINE_ID, 
                               pipeline_params: DEFAULT_PIPELINE_PARAMS 
                             })
@@ -127,10 +128,10 @@ app.post('/update-stream-params', async (req, res) => {
         console.log(`[DEBUG] Aggiornamento stream ${streamId} per sessione ${sessionId}`);
 
         const paramsPayload = { "params": { "prompt": prompt } };
-        const response = await fetch(`${API_BASE_URL}/v1/streams/${streamId}`, {
+        const response = await fetch(`${DAYDREAM_API_BASE_URL}/v1/streams/${streamId}`, {
             method: 'PATCH',
             headers: {
-                'Authorization': `Bearer ${API_KEY}`,
+                'Authorization': `Bearer ${DAYDREAM_API_KEY}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(paramsPayload)

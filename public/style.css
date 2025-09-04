@@ -44,10 +44,35 @@ video::-webkit-media-controls { display: none; }
     width: 100%;
     flex-grow: 1;
     min-height: 0;
-    background-color: #000;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-md);
     overflow: hidden;
+}
+
+/* Stili per la Sovrapposizione e la Dissolvenza */
+#local-preview-overlay,
+#playback-video,
+.playback-video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+#local-preview-overlay {
+    z-index: 2;
+    opacity: 1;
+    transition: opacity 1.5s ease-out;
+}
+
+#local-preview-overlay.fade-out {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#playback-video {
+    z-index: 1;
 }
 
 /* Sezione Controlli */
@@ -57,6 +82,7 @@ video::-webkit-media-controls { display: none; }
     justify-content: center;
     align-items: flex-end;
     gap: 1.5rem;
+    padding-bottom: 1rem; /* Aggiunto padding per più respiro */
 }
 
 .prompt-wrapper {
@@ -107,7 +133,7 @@ video::-webkit-media-controls { display: none; }
     border: 3px solid var(--border-color);
     background-color: #FFFFFF;
     box-shadow: var(--shadow-sm);
-    position: relative; /* Necessario per posizionare gli SVG */
+    position: relative;
 }
 
 .prompt-button:hover:not(:disabled) {
@@ -144,41 +170,24 @@ video::-webkit-media-controls { display: none; }
     border: none;
 }
 
-/* --- SOLUZIONE: Logica per l'icona dinamica --- */
+/* Logica per l'icona dinamica */
+#update-params-btn .arrow-icon { display: none; }
+#update-params-btn .mic-icon { display: block; }
+#update-params-btn.has-text .mic-icon { display: none; }
+#update-params-btn.has-text .arrow-icon { display: block; }
+#update-params-btn .arrow-icon { color: white; }
 
-/* Per impostazione predefinita, mostra solo il microfono */
-#update-params-btn .arrow-icon {
-    display: none;
-}
-#update-params-btn .mic-icon {
-    display: block;
-}
-
-/* Quando il pulsante ha la classe .has-text... */
-#update-params-btn.has-text .mic-icon {
-    display: none; /* ...nascondi il microfono... */
-}
-
-#update-params-btn.has-text .arrow-icon {
-    display: block; /* ...e mostra la freccia. */
-}
-
-/* Stili Video e Loader (invariati) */
-#playback-video, .playback-video {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
+/* Stile per il video Picture-in-Picture */
 #playback-video.mini-video {
     position: fixed;
+    top: auto;
+    left: auto;
     bottom: 20px;
     right: 20px;
     width: 220px;
     height: 124px;
     border-radius: 12px;
-    background: black;
+    background-color: var(--text-color); /* Corretto colore di sfondo */
     object-fit: cover;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
     z-index: 9999;
@@ -190,69 +199,78 @@ video::-webkit-media-controls { display: none; }
     to { transform: scale(1); opacity: 1; }
 }
 
+/* --- NUOVO LOADER CON ONDA GRADIENTE LUMINOSA --- */
+/* --- LOADER CON GRADIENTE CONTINUO E WAVE LUMINOSA --- */
+
+@keyframes rotate-gradient {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
 #loader, .loader {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    color: white;
-    font-family: sans-serif;
-    z-index: 10;
-}
-
-.spinner {
-    border: 4px solid rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
-    border-top: 4px solid #fff;
-    width: 40px;
-    height: 40px;
-    animation: spin 1s linear infinite;
-    margin-bottom: 10px;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* Effetti parole (invariati) */
-.word-pop {
-    position: fixed;
-    z-index: 9999;
-    font-family: 'Fredoka One', sans-serif;
-    font-weight: 400;
-    color: #fff;
-    text-shadow: 0 0 40px rgba(0, 0, 0, 0.9), 0 0 80px rgba(255, 255, 255, 0.6);
-    opacity: 0;
-    transform: scale(0.5) rotate(-10deg);
     pointer-events: none;
-    white-space: nowrap;
-    transition: opacity 0.6s ease, transform 1s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.word-pop.show {
+    border-radius: var(--border-radius);
     opacity: 1;
-    transform: scale(1) rotate(0deg);
+    transition: opacity 0.5s ease-out;
+    overflow: hidden;
+    box-sizing: border-box;
+    padding: 6px; /* padding per separare il bordo dal video */
+    background: magenta;
 }
 
-.word-pop.fadeout {
+/* Anello luminoso animato */
+#loader::before, .loader::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 180%;
+    height: 180%;
+    background: conic-gradient(
+        from 0deg,
+        var(--accent-color) 0%,
+        rgba(99, 102, 241, 0.3) 25%,
+        transparent 50%,
+        rgba(99, 102, 241, 0.3) 75%,
+        var(--accent-color) 100%
+    );
+    animation: rotate-gradient 2.5s linear infinite;
+    transform-origin: center center;
+    transform: translate(-50%, -50%);
+    filter: blur(4px) brightness(1.4); /* più glow */
+    border-radius: 50%;
+    opacity: 0.9;
+}
+
+/* Maschera centrale: crea solo il bordo visibile */
+#loader::after, .loader::after {
+    content: '';
+    position: absolute;
+    top: 10px;   
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    background: #000; /* colore video-container */
+    border-radius: calc(var(--border-radius) - 8px);
+}
+
+/* Sparizione del loader */
+#loader.loading-finished, .loader.loading-finished {
     opacity: 0;
-    transform: scale(1.3) rotate(10deg);
-    transition: opacity 1.2s ease, transform 1.2s ease;
 }
 
-/* Stili per la vista slider (invariati) */
+
+/* Stili per la vista slider */
 body.slider-view-active {
     display: block;
     padding: 0;
     overflow: hidden;
-    background-color: #000;
+    /* background-color: #000; */
 }
 
 #stream-container {
@@ -286,16 +304,14 @@ body.slider-view-active {
     transform: translateZ(0) scale(1);
 }
 
-
-/* Stile per il logger on-screen */
+/* Logger on-screen (invariato) */
 #on-screen-logger {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     max-height: 20vh;
-    overflow-y: auto; /* Abilita lo scroll se i log sono troppi */
-    background: rgba(0, 0, 0, 0.7);
+    overflow-y: auto;
     color: white;
     font-size: 12px;
     z-index: 9999;
@@ -303,8 +319,8 @@ body.slider-view-active {
     box-sizing: border-box;
     font-family: monospace;
     display: flex;
-    flex-direction: column; /* Impila i log verticalmente */
-    pointer-events: none; /* Permette ai click di "passare attraverso" */
+    flex-direction: column;
+    pointer-events: none;
 }
 
 .log-entry {
@@ -315,7 +331,7 @@ body.slider-view-active {
     margin-bottom: 4px;
     font-family: monospace;
     font-size: 12px;
-    pointer-events: all; /* Permette di selezionare il testo dei log */
+    pointer-events: all;
     flex-shrink: 0;
 }
 
@@ -324,56 +340,35 @@ body.slider-view-active {
     color: #ffdddd;
 }
 
-.log-entry.fade-out {
-    opacity: 0;
-}
-
-
-.prompt-button .arrow-icon {
-    color: white;
-}
-
-/* Logica per scambiare le icone sul pulsante di invio */
-#update-params-btn .mic-icon { display: block; }
-#update-params-btn .arrow-icon { display: none; }
-
-#update-params-btn.has-text .mic-icon { display: none; }
-#update-params-btn.has-text .arrow-icon { display: block; }
-
-/* NUOVO: Stile per il feedback visivo della registrazione */
+/* Feedback visivo registrazione (invariato) */
 #update-params-btn.is-recording {
-    background-color: rgba(255, 82, 82, 0.5); /* Sfondo rosso traslucido */
+    background-color: rgba(255, 82, 82, 0.5);
     animation: pulse 1.5s infinite ease-in-out;
 }
 
 @keyframes pulse {
-    0% {
-        transform: scale(1);
-        box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.7);
-    }
-    70% {
-        transform: scale(1.05);
-        box-shadow: 0 0 10px 15px rgba(255, 82, 82, 0);
-    }
-    100% {
-        transform: scale(1);
-        box-shadow: 0 0 0 0 rgba(255, 82, 82, 0);
-    }
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.7); }
+    70% { transform: scale(1.05); box-shadow: 0 0 10px 15px rgba(255, 82, 82, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 82, 82, 0); }
 }
 
-
-#audio-visualizer {
-    position: fixed;
-    top: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 200px;
-    height: 50px;
-    z-index: 10000;
-    opacity: 0;
-    transition: opacity 0.3s ease-in-out;
-    pointer-events: none;
+.video-inner {
+    position: absolute;
+    inset: 12px; /* padding interno rispetto al loader */
+    border-radius: calc(var(--border-radius) - 12px);
+    overflow: hidden;
+    background: #000; /* fallback */
+    z-index: 1;
 }
-#audio-visualizer.visible {
-    opacity: 0.7;
+
+/* Entrambi i video riempiono lo stesso box */
+.video-inner video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;   /* riempie senza bande */
+    object-position: center;
+    border-radius: inherit;
 }
