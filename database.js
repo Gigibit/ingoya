@@ -8,10 +8,12 @@ import { open } from 'sqlite';
 export async function setupDatabase() {
   try {
     const db = await open({
-      filename: './sessions.db',
+      filename: './database.db', // Un unico file di database per l'app
       driver: sqlite3.Database
     });
+
     console.log('🔗 Connesso al database SQLite.');
+
     await db.exec(`
       CREATE TABLE IF NOT EXISTS sessions (
         sessionId TEXT PRIMARY KEY,
@@ -24,13 +26,71 @@ export async function setupDatabase() {
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    console.log('✅ Tabella "sessions" pronta.');
+
+    await db.exec(`
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            email TEXT UNIQUE,
+            hashedPassword TEXT,
+            currentChallenge TEXT,
+            lastIpAddress TEXT,
+            createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+    
+    await db.exec(`
+        CREATE TABLE IF NOT EXISTS authenticators (
+            id TEXT PRIMARY KEY,
+            userId INTEGER NOT NULL,
+            credentialPublicKey TEXT NOT NULL,
+            counter INTEGER NOT NULL,
+            transports TEXT,
+            FOREIGN KEY (userId) REFERENCES users(id)
+        )
+    `);
+
+    console.log('✅ Tabelle del database pronte.');
     return db;
   } catch (err) {
     console.error('❌ Errore durante la configurazione del database:', err.message);
     process.exit(1);
   }
 }
+
+/**
+ * Crea l'utente e la sessione per l'AI se non esistono.
+ * Questo assicura che Theia sia sempre "trovabile" dagli altri utenti.
+ * @param {Database} db - L'istanza del database.
+ */
+export async function seedAiUser(db) {
+    const AI_USERNAME = 'Theia';
+    const AI_SESSION_ID = 'THEIA_SESSION';
+
+    try {
+        // Crea l'utente AI se non esiste
+        await db.run(
+            `INSERT OR IGNORE INTO users (username) VALUES (?)`,
+            [AI_USERNAME]
+        );
+
+        // Crea la sessione per l'AI se non esiste
+        // Nota: non ha bisogno di URL, solo di essere "attiva"
+        await db.run(
+            `INSERT OR IGNORE INTO sessions (sessionId, isActive, participantCount) VALUES (?, 1, 1)`,
+            [AI_SESSION_ID]
+        );
+        console.log(`🤖 Utente e sessione per l'AI "${AI_USERNAME}" verificati.`);
+    } catch (err) {
+        console.error("❌ Errore durante il seeding dell'utente AI:", err.message);
+    }
+}
+
+export async function getTheiaSession(db) {
+    return db.get(`SELECT sessionId, whepUrl FROM sessions WHERE sessionId = 'THEIA_SESSION' AND isActive = 1`);
+}
+
+
 
 // --- NUOVE FUNZIONI ESPORTATE PER LA GESTIONE DELLE SESSIONI ---
 

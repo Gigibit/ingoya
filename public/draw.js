@@ -1,4 +1,5 @@
 // o gioia, ch'io conobbi, esser amato amando!
+import { Theia } from './theia.js';
 
 class AppController {
     // --- Inizializzazione della Classe ---
@@ -9,9 +10,12 @@ class AppController {
         this.sessionId = this._generateSessionId();
         this.currentAudioPartnerSocketId = null;
         this.isSliderViewActive = false;
-        this.isConfigOverlayActive = false; // Nuovo stato per la vista overlay
+        this.isConfigOverlayActive = false;
         this.canExplore = false;
         this.isTransitioning = false;
+        this.theiaInstance = null;
+        this.userWhepUrl = null; // WHEP URL personale dell'utente
+        this.theiaLivepeerConnection = null; // Connessione dedicata per hostare lo stream di Theia
 
         // Connessioni WebRTC
         this.livepeerConnection = null;
@@ -31,27 +35,29 @@ class AppController {
 
         // Avvio
         this._init();
-        document.getElementById('main-title').style.opacity = '0'
+        document.getElementById('main-title').style.opacity = '0';
     }
 
     /**
      * Metodo principale di inizializzazione che avvia l'applicazione.
      */
-    _init() {
+    async _init() {
+        const isAuthenticated = await this._verifyAuthentication();
+        if (!isAuthenticated) {
+            console.log("Verifica fallita. Inizializzazione dell'app interrotta.");
+            return;
+        }
+
+        console.log("✅ Autenticazione riuscita. Avvio dell'applicazione...");
         this._setupSocket();
         this._setupEventListeners();
 
-        // Avvia automaticamente il processo dopo un breve ritardo
-        setTimeout(() => this.cameraButton.click(), 1000);
+        this.main();
     }
-
-    // --- Metodi Privati di Setup ---
 
     _generateSessionId(length = 6) {
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('sessionId')) {
-            return urlParams.get('sessionId');
-        }
+        if (urlParams.has('sessionId')) return urlParams.get('sessionId');
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let result = '';
         for (let i = 0; i < length; i++) {
@@ -60,30 +66,47 @@ class AppController {
         return result;
     }
 
+    async _verifyAuthentication() {
+        try {
+            const response = await fetch('/random-stream?excludeSessionId=auth-check', { redirect: 'manual' });
+            if (response.type === 'opaqueredirect' || response.status === 401) {
+                window.location.href = '/';
+                return false;
+            }
+            if (!response.ok && response.status !== 404) {
+                throw new Error('Errore del server durante la verifica del token.');
+            }
+            return true;
+        } catch (error) {
+            console.error("Errore durante la verifica dell'autenticazione:", error);
+            window.location.href = '/';
+            return false;
+        }
+    }
+
     _setupEventListeners() {
         this.cameraButton.addEventListener('click', () => this.main());
         this.updateBtn.addEventListener('click', () => this.handleUpdateParams());
-
-        // --- MODIFICA: Il click sul video ora gestisce l'overlay ---
         this.originalPlaybackVideo.addEventListener('click', () => {
-            if (this.isSliderViewActive) {
-                this.toggleConfigOverlay();
-            }
+            if (this.isSliderViewActive) this.toggleConfigOverlay();
         });
-        // --- FINE MODIFICA ---
-
         this.promptInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !this.updateBtn.disabled) {
                 e.preventDefault();
                 this.handleUpdateParams();
             }
         });
-
         document.addEventListener('usermessageinterpolation', (e) => {
             if (this.socket) {
                 this.socket.emit('share-user-message', { sessionId: this.sessionId, text: e.detail.text, interpolation: e.detail.interpolation });
             }
             this.handleUpdateParams(e.detail.interpolation);
+        });
+
+        // Ascolta l'evento che Theia emette quando il suo audio è pronto
+        document.addEventListener('theiaAudioReady', (e) => {
+            console.log("AppController: Audio di Theia ricevuto, avvio lo stream pubblico per lei.");
+            this.createAndHostTheiaStream(e.detail.stream);
         });
     }
 
@@ -97,15 +120,63 @@ class AppController {
         });
         this._setupSocketListeners();
     }
+    /**
+     * NUOVO METODO: Crea e hosta lo stream pubblico per Theia.
+     * @param {MediaStream} theiaAudioStream - Lo stream audio generato da Theia.
+     */
+    async createAndHostTheiaStream(theiaAudioStream) {
+        console.log("Inizio a creare lo stream pubblico per Theia...");
+        try {
+            const response = await fetch('/stream-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId: 'THEIA_SESSION' })
+            });
+            if (!response.ok) throw new Error(`Errore dal server: ${response.statusText}`);
+            const sessionData = await response.json();
+
+            if (this.theiaLivepeerConnection) this.theiaLivepeerConnection.close();
+            this.theiaLivepeerConnection = new RTCPeerConnection();
+            
+            theiaAudioStream.getTracks().forEach(track => this.theiaLivepeerConnection.addTrack(track, theiaAudioStream));
+            
+            const offer = await this.theiaLivepeerConnection.createOffer();
+            await this.theiaLivepeerConnection.setLocalDescription(offer);
+            
+            const whipResponse = await fetch(sessionData.whipUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/sdp' },
+                body: this.theiaLivepeerConnection.localDescription.sdp
+            });
+            if (whipResponse.status !== 201) throw new Error(`Connessione WHIP per Theia fallita: ${whipResponse.statusText}`);
+
+            const whepUrl = whipResponse.headers.get('livepeer-playback-url')?.replace('fra-ai-mediamtx-0.livepeer.com', 'ai.livepeer.com');
+            if (!whepUrl) throw new Error('Header livepeer-playback-url mancante per Theia.');
+
+            await fetch('/update-whep-url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId: 'THEIA_SESSION', whepUrl })
+            });
+
+            const answerSdp = await whipResponse.text();
+            await this.theiaLivepeerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+
+            console.log(`✅ Stream pubblico per Theia è attivo e visibile a: ${whepUrl}`);
+            
+            const theiaSlide = document.querySelector(".slide[data-session-id='THEIA_SESSION'] .playback-video");
+            if (theiaSlide) {
+                this.handleStartPlayback(theiaSlide, whepUrl);
+            }
+
+        } catch (error) {
+            console.error("Errore durante la creazione dello stream di Theia:", error);
+        }
+    }
 
     _setupSocketListeners() {
-        // Listener per la chat audio P2P
         this.socket.on('audio-request-received', async ({ visitorSocketId }) => {
-            if (this.currentAudioPartnerSocketId === visitorSocketId) {
-                console.log(`⚠️ Richiesta di chiamata duplicata da ${visitorSocketId}, la ignoro.`);
-                return;
-            }
-            console.log(`📥 Ricevuta richiesta di chiamata da ${visitorSocketId}`);
+            if (this.currentAudioPartnerSocketId === visitorSocketId) return;
             this.hangUp();
             this.currentAudioPartnerSocketId = visitorSocketId;
             this.setupAudioPeerConnection();
@@ -113,7 +184,6 @@ class AppController {
             await this.p2pAudioConnection.setLocalDescription(offer);
             this.socket.emit('audio-offer', { offer, targetSocketId: visitorSocketId });
         });
-
         this.socket.on('audio-offer', async ({ offer, streamerSocketId }) => {
             if (!this.localAudioSubStream) return;
             this.currentAudioPartnerSocketId = streamerSocketId;
@@ -123,51 +193,38 @@ class AppController {
             await this.p2pAudioConnection.setLocalDescription(answer);
             this.socket.emit('audio-answer', { answer, targetSocketId: streamerSocketId });
         });
-
         this.socket.on('audio-answer', async (answer) => {
             if (this.p2pAudioConnection && !this.p2pAudioConnection.currentRemoteDescription) {
                 await this.p2pAudioConnection.setRemoteDescription(new RTCSessionDescription(answer));
             }
         });
-
         this.socket.on('audio-ice-candidate', async (candidate) => {
             if (this.p2pAudioConnection && candidate) {
-                try {
-                    await this.p2pAudioConnection.addIceCandidate(candidate);
-                } catch (e) { console.error('Errore ICE:', e); }
+                try { await this.p2pAudioConnection.addIceCandidate(candidate); }
+                catch (e) { console.error('Errore ICE:', e); }
             }
         });
-
-        this.socket.on('hang-up', () => {
-            console.log("L'altro utente ha terminato la chiamata.");
-            this.hangUp();
-        });
+        this.socket.on('hang-up', () => this.hangUp());
     }
-
-    // --- Flusso Principale dell'Applicazione ---
 
     async main() {
         await this.toggleVideoSource();
-        await this.getOrCreateStreamSession(this.localStream);
+        if (this.localStream) {
+            await this.getOrCreateStreamSession(this.localStream);
+        }
     }
 
     async toggleVideoSource() {
         this.cameraButton.classList.toggle('camera-enabled');
         const isCameraActive = this.cameraButton.classList.contains('camera-enabled');
         const canvasContainer = document.getElementById('canvas-container');
-
         try {
             if (isCameraActive) {
                 this.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 this.localAudioSubStream = new MediaStream(this.localStream.getAudioTracks());
                 this.localPreviewOverlay.srcObject = this.localStream;
-                this.localPreviewOverlay.onloadedmetadata = () => {
-                    this.localPreviewOverlay.play().catch(err => {
-                        console.warn("Autoplay bloccato, in attesa di interazione:", err);
-                    });
-                };
+                this.localPreviewOverlay.play().catch(e => {});
                 this.localPreviewOverlay.classList.remove('fade-out');
-
             } else {
                 if (this.localStream) this.localStream.getTracks().forEach(track => track.stop());
                 this.localAudioSubStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -180,8 +237,6 @@ class AppController {
             console.error("Accesso a media fallito:", err);
         }
     }
-
-    // --- Gestione UI ---
 
     switchToSliderView() {
         if (this.isSliderViewActive) return;
@@ -196,7 +251,7 @@ class AppController {
         this.originalPlaybackVideo.classList.add('mini-video');
         document.body.appendChild(this.originalPlaybackVideo);
         this.preloadNextStream();
-
+        this.controlsSection.style.opacity = '0';
         let touchStartY = 0;
         window.addEventListener('wheel', (event) => { if (event.deltaY > 0) this.transitionToNextStream(); }, { passive: false });
         window.addEventListener('touchstart', (e) => { touchStartY = e.changedTouches[0].screenY; }, { passive: false });
@@ -205,25 +260,16 @@ class AppController {
         }, { passive: false });
     }
 
-    // --- NUOVO METODO: Gestisce l'overlay di configurazione ---
     toggleConfigOverlay() {
         this.isConfigOverlayActive = !this.isConfigOverlayActive;
         document.body.classList.toggle('config-overlay-active', this.isConfigOverlayActive);
-
-        if (this.isConfigOverlayActive) {
-            console.log("Entrata in modalità configurazione overlay.");
-            // Interrompe la chiamata audio per evitare di parlare mentre si scrive
-            this.hangUp();
-        } else {
-            console.log("Uscita dalla modalità configurazione overlay.");
-            // L'utente può scorrere per avviare una nuova chiamata
-        }
+        this.controlsSection.style.opacity = this.isConfigOverlayActive ? '1' : '0';
+        if (this.isConfigOverlayActive) this.hangUp();
     }
 
     enableExploreMode() {
         if (this.canExplore) return;
         this.canExplore = true;
-
         const handleInitialScroll = (event) => {
             if (this.canExplore && !this.isSliderViewActive && event.deltaY > 0) {
                 event.preventDefault();
@@ -231,13 +277,11 @@ class AppController {
                 this.switchToSliderView();
             }
         };
-
         const handleInitialTouch = (e) => {
             if (!this.canExplore || this.isSliderViewActive) return;
             const touchStartY = e.changedTouches[0].screenY;
             const onTouchEnd = (endEvent) => {
-                const deltaY = touchStartY - endEvent.changedTouches[0].screenY;
-                if (deltaY > 50) {
+                if (touchStartY - endEvent.changedTouches[0].screenY > 50) {
                     window.removeEventListener('touchend', onTouchEnd);
                     window.removeEventListener('wheel', handleInitialScroll);
                     this.switchToSliderView();
@@ -245,27 +289,20 @@ class AppController {
             };
             window.addEventListener('touchend', onTouchEnd, { passive: false });
         };
-
         window.addEventListener('wheel', handleInitialScroll, { passive: false });
         window.addEventListener('touchstart', handleInitialTouch, { passive: false });
     }
 
     transitionToNextStream() {
-        // Se siamo in modalità overlay, esci prima di cambiare slide
-        if (this.isConfigOverlayActive) {
-            this.toggleConfigOverlay();
-        }
+        if (this.isConfigOverlayActive) this.toggleConfigOverlay();
         this.hangUp();
         if (this.isTransitioning) return;
-
         const currentSlide = document.querySelector('.slide.is-visible');
         const nextSlide = document.querySelector('.slide:not(.is-visible)');
-        if (!currentSlide || !nextSlide || !nextSlide.querySelector('video')?.srcObject) {
-            return console.warn("Transizione annullata: video non pronto.");
+        if (!currentSlide || !nextSlide || !(nextSlide.querySelector('video')?.srcObject || nextSlide.dataset.sessionId === 'THEIA_SESSION')) {
+            return console.warn("Transizione annullata: contenuto non pronto.");
         }
-
         this.isTransitioning = true;
-
         nextSlide.style.zIndex = '2';
         nextSlide.classList.add('is-visible');
         nextSlide.addEventListener('transitionend', () => {
@@ -274,9 +311,8 @@ class AppController {
                 nextSlide.style.zIndex = '1';
                 this.preloadNextStream();
                 this.isTransitioning = false;
-
                 const streamerSessionId = nextSlide.dataset.sessionId;
-                if (this.localAudioSubStream && streamerSessionId) {
+                if (streamerSessionId !== 'THEIA_SESSION' && this.localAudioSubStream) {
                     this.socket.emit('request-audio-call', { streamerSessionId });
                 }
             }, 400);
@@ -296,19 +332,12 @@ class AppController {
         requestAnimationFrame(step);
     }
 
-    // --- Networking e Streaming ---
-
     async preloadNextStream() {
         try {
             const response = await fetch(`/random-stream?excludeSessionId=${this.sessionId}`);
-            if (response.status === 404) return console.log("Nessun altro stream trovato.");
             if (!response.ok) throw new Error(`Errore di rete: ${response.statusText}`);
             const data = await response.json();
-            const nextStreamUrl = data.whepUrl;
-            if (!nextStreamUrl) {
-                return console.error("La risposta dal server non contiene un URL valido.", data);
-            }
-            this.handleNewRandomStream(data.sessionId, nextStreamUrl);
+            this.handleNewRandomStream(data.sessionId, data.whepUrl);
         } catch (err) {
             console.error("Errore preloadNextStream:", err);
         }
@@ -316,21 +345,30 @@ class AppController {
 
     handleNewRandomStream(streamerSessionId, url) {
         const streamContainer = document.getElementById('stream-container');
-        const preloadedVideoElement = document.querySelector('#random-stream-slide .playback-video');
+        let targetSlide = document.querySelector(`.slide:not(.is-visible)`);
+        if (!targetSlide) {
+            targetSlide = document.createElement('div');
+            targetSlide.className = 'slide';
+            streamContainer.appendChild(targetSlide);
+        }
+        
+        targetSlide.dataset.sessionId = streamerSessionId;
+        targetSlide.innerHTML = `<video class="playback-video" autoplay playsinline muted></video>`;
+        const videoEl = targetSlide.querySelector('.playback-video');
 
-        let targetSlide;
-        if (this.isSliderViewActive && streamContainer) {
-            const newSlide = document.createElement('div');
-            newSlide.className = 'slide';
-            newSlide.dataset.sessionId = streamerSessionId;
-            newSlide.innerHTML = `<video class="playback-video" autoplay playsinline muted></video>`;
-            streamContainer.appendChild(newSlide);
-            targetSlide = newSlide;
-            this.handleStartPlayback(newSlide.querySelector('video'), url);
+        if (streamerSessionId === 'THEIA_SESSION') {
+            console.log("🤖 Incontro con Theia. Avvio interazione audio.");
+            if (url) {
+                this.handleStartPlayback(videoEl, url);
+            } else {
+                console.log("Nessuno sta hostando Theia. Divento io l'host.");
+            }
+            if (this.localAudioSubStream) {
+                this.theiaInstance = new Theia();
+                this.theiaInstance.startConversation(this.localAudioSubStream);
+            }
         } else {
-            targetSlide = document.getElementById('random-stream-slide');
-            targetSlide.dataset.sessionId = streamerSessionId;
-            this.handleStartPlayback(preloadedVideoElement, url);
+            this.handleStartPlayback(videoEl, url);
         }
     }
 
@@ -344,42 +382,32 @@ class AppController {
             });
             if (!response.ok) throw new Error(`Errore dal server: ${response.statusText}`);
             const sessionData = await response.json();
-
             if (this.livepeerConnection) this.livepeerConnection.close();
             this.livepeerConnection = new RTCPeerConnection();
             sourceStream.getTracks().forEach(track => this.livepeerConnection.addTrack(track, sourceStream));
-
             const offer = await this.livepeerConnection.createOffer();
             await this.livepeerConnection.setLocalDescription(offer);
-
             const whipResponse = await fetch(sessionData.whipUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/sdp' },
                 body: this.livepeerConnection.localDescription.sdp
             });
             if (whipResponse.status !== 201) throw new Error(`Connessione WHIP fallita: ${whipResponse.statusText}`);
-
-            const whepUrl = whipResponse.headers.get('livepeer-playback-url').replace('fra-ai-mediamtx-0.livepeer.com', 'ai.livepeer.com');
+            const whepUrl = whipResponse.headers.get('livepeer-playback-url')?.replace('fra-ai-mediamtx-0.livepeer.com', 'ai.livepeer.com');
             if (!whepUrl) throw new Error('Header livepeer-playback-url mancante.');
-
             await fetch('/update-whep-url', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sessionId: this.sessionId, whepUrl })
             });
-
             const answerSdp = await whipResponse.text();
             await this.livepeerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
-
             this.updateBtn.disabled = false;
             this.handleStartPlayback(this.originalPlaybackVideo, whepUrl);
             this.enableExploreMode();
         } catch (error) {
             console.error('Errore getOrCreateStreamSession:', error);
         }
-        document.dispatchEvent(new CustomEvent('streamAudioReady', {
-            detail: { localAudioStream: this.localAudioSubStream, peerConnection: this.livepeerConnection }
-        }));
     }
 
     handleStartPlayback(targetVideoElement, whepUrl) {
@@ -394,17 +422,11 @@ class AppController {
                 playbackPeerConnection.ontrack = (event) => {
                     const loader = document.getElementById('loader');
                     if (loader) loader.style.display = 'none';
-
                     if (targetVideoElement.srcObject !== event.streams[0]) {
                         targetVideoElement.srcObject = event.streams[0];
                     }
-
-                    setTimeout(() => {
-                        this.localPreviewOverlay.addEventListener('transitionend', this.localPreviewOverlay.remove)
-                        this.localPreviewOverlay.style.opacity = '0';
-                    }, 1500);
-
-
+                    this.localPreviewOverlay.classList.add('fade-out');
+                    this.localPreviewOverlay.addEventListener('transitionend', () => this.localPreviewOverlay.remove(), { once: true });
                     if (targetVideoElement.id === 'playback-video') this.enableExploreMode();
                     if (targetVideoElement.reconnectTimeoutId) { clearTimeout(targetVideoElement.reconnectTimeoutId); targetVideoElement.reconnectTimeoutId = null; }
                 };
@@ -439,19 +461,14 @@ class AppController {
         }
     }
 
-    // --- Logica Chat P2P ---
-
     setupAudioPeerConnection() {
         if (this.p2pAudioConnection) this.p2pAudioConnection.close();
         const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
         this.p2pAudioConnection = new RTCPeerConnection(configuration);
-
         this.localAudioSubStream.getTracks().forEach(track => {
             this.p2pAudioConnection.addTrack(track, this.localAudioSubStream);
         });
-
         this.p2pAudioConnection.ontrack = (event) => {
-            console.log(`🎤 Traccia audio ricevuta per ${this.currentAudioPartnerSocketId}`);
             let remoteAudioEl = document.getElementById('remote-audio');
             if (!remoteAudioEl) {
                 remoteAudioEl = document.createElement('audio');
@@ -465,7 +482,6 @@ class AppController {
                 remoteAudioEl.play().catch(e => console.warn("Autoplay audio bloccato", e));
             }
         };
-
         this.p2pAudioConnection.onicecandidate = (event) => {
             if (event.candidate && this.currentAudioPartnerSocketId) {
                 this.socket.emit('audio-ice-candidate', {
@@ -484,16 +500,21 @@ class AppController {
             this.p2pAudioConnection.close();
             this.p2pAudioConnection = null;
         }
-
-        const remoteAudioEl = document.getElementById('remote-audio');
-        if (remoteAudioEl) {
-            remoteAudioEl.remove();
+        if (this.theiaInstance) {
+            this.theiaInstance.stopConversation();
+            this.theiaInstance = null;
+        }
+        if (this.theiaLivepeerConnection) {
+            this.theiaLivepeerConnection.close();
+            this.theiaLivepeerConnection = null;
+            console.log("🛑 Stoppato lo streaming pubblico di Theia.");
         }
 
+        const remoteAudioEl = document.getElementById('remote-audio');
+        if (remoteAudioEl) remoteAudioEl.remove();
         this.currentAudioPartnerSocketId = null;
     }
 }
 
-// Avvia l'applicazione quando il DOM è pronto
 window.addEventListener('DOMContentLoaded', () => new AppController());
 

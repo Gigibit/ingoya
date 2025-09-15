@@ -7,6 +7,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import lunaRouter from './luna.router.js';
+import createAuthRouter from './auth.router.js'; 
+import cookieParser from 'cookie-parser';
+import { protectRoute } from './auth.middleware.js';
 
 // Importa sia il setup che le nuove funzioni di query
 import {
@@ -17,7 +20,9 @@ import {
   saveWhepUrlDetails,
   getStreamIdBySessionId,
   updateDbParticipantCount,
-  getRandomActiveStream
+  getRandomActiveStream,
+  seedAiUser,
+  getTheiaSession
 } from './database.js';
 
 dotenv.config();
@@ -32,9 +37,9 @@ const PIPELINE_ID = "pip_qpUgXycjWF6YMeSL";
 const DEFAULT_PIPELINE_PARAMS = { "model_id": "stabilityai/sd-turbo", "prompt": "describe human beings. REAL, NOT drawn, NOT blurry, NOT low quality, NOT flat, NOT 2d", "negative_prompt": "blurry, low quality, flat, 2d", "num_inference_steps": 50, "seed": 42, "t_index_list": [2, 4, 6], "controlnets": [{ "conditioning_scale": 0.4, "enabled": true, "model_id": "thibaud/controlnet-sd21-openpose-diffusers", "preprocessor": "pose_tensorrt" }, { "conditioning_scale": 0.14, "enabled": true, "model_id": "thibaud/controlnet-sd21-hed-diffusers", "preprocessor": "soft_edge" }, { "conditioning_scale": 0.27, "enabled": true, "model_id": "thibaud/controlnet-sd21-canny-diffusers", "preprocessor": "canny", "preprocessor_params": { "high_threshold": 200, "low_threshold": 100 } }, { "conditioning_scale": 0.34, "enabled": true, "model_id": "thibaud/controlnet-sd21-depth-diffusers", "preprocessor": "depth_tensorrt" }, { "conditioning_scale": 0.66, "enabled": true, "model_id": "thibaud/controlnet-sd21-color-diffusers", "preprocessor": "passthrough" }] };
 
 
-if (!OPENAI_API_KEY) {
+if (!OPENAI_API_KEY)
   throw new Error('missing OPENAI_API_KEY')
-}
+
 let db;
 const app = express();
 const httpServer = createServer(app);
@@ -53,11 +58,12 @@ function generateSessionId(length = 6) {
   return result;
 }
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.static("public"));
 
 // --- ENDPOINT REST ---
 
-app.post('/stream-session', async (req, res) => {
+app.post('/stream-session', protectRoute, async (req, res) => {
   let { sessionId } = req.body;
   if (!sessionId) sessionId = generateSessionId(6)
   try {
@@ -74,7 +80,6 @@ app.post('/stream-session', async (req, res) => {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${DAYDREAM_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: `stream-${sessionId}`,
-                              prompt:
                               pipeline_id: PIPELINE_ID, 
                               pipeline_params: DEFAULT_PIPELINE_PARAMS 
                             })
@@ -91,6 +96,7 @@ app.post('/stream-session', async (req, res) => {
       console.error("[DEBUG] Risposta Livepeer senza whip_url:", JSON.stringify(streamData, null, 2));
       throw new Error('whip_url mancante nella risposta di Livepeer.');
     }
+    console.log(res)
 
     await saveWhipDetails(db, sessionId, streamId, whipUrl);
     res.json({ streamId, sessionId, whipUrl });
@@ -100,7 +106,7 @@ app.post('/stream-session', async (req, res) => {
   }
 });
 
-app.post('/update-whep-url', async (req, res) => {
+app.post('/update-whep-url', protectRoute, async (req, res) => {
   const { sessionId, whepUrl } = req.body;
   if (!sessionId || !whepUrl) {
     return res.status(400).json({ error: "sessionId e whepUrl sono obbligatori." });
@@ -113,7 +119,7 @@ app.post('/update-whep-url', async (req, res) => {
     res.status(500).json({ error: "Errore durante il salvataggio dell'URL WHEP." });
   }
 });
-app.post('/update-stream-params', async (req, res) => {
+app.post('/update-stream-params', protectRoute, async (req, res) => {
     const { sessionId, prompt } = req.body;
     if (!sessionId || !prompt) {
         return res.status(400).json({ error: "sessionId e prompt sono obbligatori." });
@@ -151,17 +157,24 @@ app.post('/update-stream-params', async (req, res) => {
     }
 });
 
-app.get('/random-stream', async (req, res) => {
+app.get('/random-stream', protectRoute, async (req, res) => {
   const { excludeSessionId } = req.query;
   if (!excludeSessionId) {
     return res.status(400).json({ error: "Il parametro excludeSessionId è obbligatorio." });
   }
   try {
-    const randomSession = await getRandomActiveStream(db, excludeSessionId);
-    if (randomSession && randomSession.whepUrl) {
+    // 1. Cerca prima un utente umano
+    let randomSession = await getRandomActiveStream(db, excludeSessionId);
+    
+    // 2. Se non trova un umano, cerca Theia
+    if (!randomSession) {
+      console.log("🤔 Nessun utente umano trovato. Cerco Theia come fallback.");
+      randomSession = await getTheiaSession(db);
+    }
+    if (randomSession && (randomSession.whepUrl || randomSession.sessionId === 'THEIA_SESSION')) {
       res.json({ sessionId: randomSession.sessionId, whepUrl: randomSession.whepUrl });
     } else {
-      res.status(404).json({ message: "Nessun altro stream attivo trovato." });
+      res.status(404).json({ message: "Nessun altro stream attivo trovato, inclusa Theia." });
     }
   } catch (err) {
     console.error("Errore durante la ricerca di uno stream casuale:", err.message);
@@ -181,7 +194,7 @@ io.on('connection', (socket) => {
 
   // --- LOGICA PER CHIAMATA AUDIO DINAMICA ---
   socket.on('request-audio-call', ({ streamerSessionId }) => {
-    console.log(`📞 Richiesta di chiamata da ${socket.id} verso la sessione ${streamerSessionId}`);
+    console.log(`📞 Richiesta di chiamata da ${socket.id} alloy la sessione ${streamerSessionId}`);
     socket.to(streamerSessionId).emit('audio-request-received', { visitorSocketId: socket.id });
   });
   socket.on('audio-offer', ({ offer, targetSocketId }) => {
@@ -218,11 +231,11 @@ io.on('connection', (socket) => {
 });
 
 // --- ROUTE EXPRESS STATICHE ---
-app.get('/self-drawing', (_, res) => res.sendFile(path.join(__dirname, 'public', 'self_drawing.html')));
-app.get('/paint', (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/ingoya', protectRoute, (_, res) => res.sendFile(path.join(__dirname, 'public', 'ingoya.html')));
 app.get('/draw', (_, res) => res.sendFile(path.join(__dirname, "public", "draw.html")));
-app.get('/', (_, res) => res.sendFile(path.join(__dirname, "public", "summarize.html")));
-app.post("/interpret", async (req, res) => {
+app.get('/', (_, res) => res.sendFile(path.join(__dirname, "public", "login.html")));
+
+app.post("/interpret", protectRoute, async (req, res) => {
   if (!OPENAI_API_KEY) return res.status(500).json({ error: "OpenAI API Key non configurata." });
   try {
     const { text } = req.body;
@@ -245,12 +258,20 @@ app.post("/interpret", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// --- ENDPOINT PER LUNA E OPENAI ---
-app.use(lunaRouter);
+
 
 // --- FUNZIONE DI AVVIO SERVER ---
 async function startServer() {
   db = await setupDatabase();
+  
+  // --- MONTAGGIO DEI ROUTER ---
+  // Ora passiamo 'db' e altre dipendenze direttamente ai router
+  const authRouter = createAuthRouter(db);
+  await seedAiUser(db);
+
+  app.use('/auth', authRouter);
+  app.use(lunaRouter);
+
   httpServer.listen(PORT, () => console.log(`🚀 Server avviato su http://localhost:${PORT}`));
 }
 

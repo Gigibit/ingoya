@@ -170,21 +170,24 @@ const start = (stream, peerConnection) => {
   const onSentenceComplete = async (userMessage) => {
     if (!userMessage || finalTranscriptDelivered) return;
     finalTranscriptDelivered = true;
-
-    try {
-      const res = await fetch("/interpret", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: userMessage })
-      });
-      const text = await res.text();
       const userMessageInterpolationEvent = new CustomEvent("usermessageinterpolation", {
-        detail: { text: userMessage, interpolation: text }
+        detail: { text: userMessage, interpolation: userMessage }
       });
       document.dispatchEvent(userMessageInterpolationEvent);
-    } catch (err) {
-      console.error("❌ Errore fetch /interpret:", err);
-    }
+  //   try {
+  //     const res = await fetch("/interpret", {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ text: userMessage })
+  //     });
+  //     const text = await res.text();
+  //     const userMessageInterpolationEvent = new CustomEvent("usermessageinterpolation", {
+  //       detail: { text: userMessage, interpolation: text }
+  //     });
+  //     document.dispatchEvent(userMessageInterpolationEvent);
+  //   } catch (err) {
+  //     console.error("❌ Errore fetch /interpret:", err);
+  //   }
   };
 };
 
