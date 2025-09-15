@@ -6,7 +6,7 @@ export class Theia {
     constructor() {
         this.pc = new RTCPeerConnection();
         this.outChannel = null;
-        this.remoteAudioElement = null;
+        this.remoteAudioElement = null; // Aggiunto per tracciare l'elemento audio
     }
 
     /**
@@ -31,12 +31,11 @@ export class Theia {
                 console.log("🎤 Theia: Traccia audio di risposta ricevuta.");
                 const remoteStream = event.streams[0];
 
-                // Notifica al resto dell'applicazione che l'audio di Theia è pronto
                 document.dispatchEvent(new CustomEvent('theiaAudioReady', {
                     detail: { stream: remoteStream }
                 }));
-
-                // Riproduci l'audio di Theia per l'utente locale
+                
+                // Crea e gestisce l'elemento audio internamente
                 this.remoteAudioElement = document.createElement("audio");
                 this.remoteAudioElement.srcObject = remoteStream;
                 this.remoteAudioElement.autoplay = true;
@@ -76,7 +75,10 @@ export class Theia {
             this.outChannel.send(systemMessage);
         };
 
-        this.outChannel.onmessage = ev => { /* Gestisci messaggi in arrivo */ };
+        this.outChannel.onmessage = ev => {
+            // Gestisci i messaggi dal data channel...
+        };
+
         this.pc.ondatachannel = event => console.log("📥 Theia: Data channel ricevuto:", event.channel.label);
     }
     
@@ -88,6 +90,7 @@ export class Theia {
             this.pc.close();
             console.log("🛑 Theia: Conversazione terminata.");
         }
+        // Rimuove l'elemento audio creato da questa istanza
         if (this.remoteAudioElement) {
             this.remoteAudioElement.remove();
         }

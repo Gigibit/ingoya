@@ -125,8 +125,9 @@ class AppController {
      * @param {MediaStream} theiaAudioStream - Lo stream audio generato da Theia.
      */
     async createAndHostTheiaStream(theiaAudioStream) {
-        console.log("Inizio a creare lo stream pubblico per Theia...");
+        console.log("Inizio a creare lo stream pubblico per Theia usando l'audio dell'AI...");
         try {
+            // Ottieni un WHIP URL per la sessione di Theia
             const response = await fetch('/stream-session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -138,6 +139,7 @@ class AppController {
             if (this.theiaLivepeerConnection) this.theiaLivepeerConnection.close();
             this.theiaLivepeerConnection = new RTCPeerConnection();
             
+            // Invia solo l'audio di Theia a Livepeer
             theiaAudioStream.getTracks().forEach(track => this.theiaLivepeerConnection.addTrack(track, theiaAudioStream));
             
             const offer = await this.theiaLivepeerConnection.createOffer();
@@ -150,9 +152,10 @@ class AppController {
             });
             if (whipResponse.status !== 201) throw new Error(`Connessione WHIP per Theia fallita: ${whipResponse.statusText}`);
 
-            const whepUrl = whipResponse.headers.get('livepeer-playback-url')?.replace('fra-ai-mediamtx-0.livepeer.com', 'ai.livepeer.com');
+            const whepUrl = whipResponse.headers.get('livepeer-playback-url');
             if (!whepUrl) throw new Error('Header livepeer-playback-url mancante per Theia.');
 
+            // Aggiorna il DB con il nuovo WHEP URL di Theia, rendendola visibile agli altri
             await fetch('/update-whep-url', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -164,9 +167,10 @@ class AppController {
 
             console.log(`✅ Stream pubblico per Theia è attivo e visibile a: ${whepUrl}`);
             
-            const theiaSlide = document.querySelector(".slide[data-session-id='THEIA_SESSION'] .playback-video");
-            if (theiaSlide) {
-                this.handleStartPlayback(theiaSlide, whepUrl);
+            // Mostra lo stream che stiamo hostando nel nostro slide corrente
+            const theiaSlideVideo = document.querySelector(".slide[data-session-id='THEIA_SESSION'] .playback-video");
+            if (theiaSlideVideo) {
+                this.handleStartPlayback(theiaSlideVideo, whepUrl);
             }
 
         } catch (error) {
