@@ -34,7 +34,7 @@ const DAYDREAM_API_BASE_URL = "https://api.daydream.live";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const PIPELINE_ID = "pip_qpUgXycjWF6YMeSL";
-const DEFAULT_PIPELINE_PARAMS = { "model_id": "stabilityai/sd-turbo", "prompt": "describe human beings. REAL, NOT drawn, NOT blurry, NOT low quality, NOT flat, NOT 2d", "negative_prompt": "blurry, low quality, flat, 2d", "num_inference_steps": 50, "seed": 42, "t_index_list": [2, 4, 6], "controlnets": [{ "conditioning_scale": 0.4, "enabled": true, "model_id": "thibaud/controlnet-sd21-openpose-diffusers", "preprocessor": "pose_tensorrt" }, { "conditioning_scale": 0.14, "enabled": true, "model_id": "thibaud/controlnet-sd21-hed-diffusers", "preprocessor": "soft_edge" }, { "conditioning_scale": 0.27, "enabled": true, "model_id": "thibaud/controlnet-sd21-canny-diffusers", "preprocessor": "canny", "preprocessor_params": { "high_threshold": 200, "low_threshold": 100 } }, { "conditioning_scale": 0.34, "enabled": true, "model_id": "thibaud/controlnet-sd21-depth-diffusers", "preprocessor": "depth_tensorrt" }, { "conditioning_scale": 0.66, "enabled": true, "model_id": "thibaud/controlnet-sd21-color-diffusers", "preprocessor": "passthrough" }] };
+const DEFAULT_PIPELINE_PARAMS = { "model_id": "stabilityai/sd-turbo", "prompt": "fear of abbandonment.", "negative_prompt": "blurry, low quality, flat, 2d", "num_inference_steps": 50, "seed": 42, "t_index_list": [2, 4, 6], "controlnets": [{ "conditioning_scale": 0.4, "enabled": true, "model_id": "thibaud/controlnet-sd21-openpose-diffusers", "preprocessor": "pose_tensorrt" }, { "conditioning_scale": 0.14, "enabled": true, "model_id": "thibaud/controlnet-sd21-hed-diffusers", "preprocessor": "soft_edge" }, { "conditioning_scale": 0.27, "enabled": true, "model_id": "thibaud/controlnet-sd21-canny-diffusers", "preprocessor": "canny", "preprocessor_params": { "high_threshold": 200, "low_threshold": 100 } }, { "conditioning_scale": 0.34, "enabled": true, "model_id": "thibaud/controlnet-sd21-depth-diffusers", "preprocessor": "depth_tensorrt" }, { "conditioning_scale": 0.66, "enabled": true, "model_id": "thibaud/controlnet-sd21-color-diffusers", "preprocessor": "passthrough" }] };
 
 
 if (!OPENAI_API_KEY)
@@ -134,6 +134,63 @@ app.post('/update-stream-params', protectRoute, async (req, res) => {
         console.log(`[DEBUG] Aggiornamento stream ${streamId} per sessione ${sessionId}`);
 
         const paramsPayload = { "params": { "prompt": prompt + '. REAL, NOT drawn, NOT blurry, NOT low quality, NOT flat, NOT 2d"' } };
+        const response = await fetch(`${DAYDREAM_API_BASE_URL}/v1/streams/${streamId}`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${DAYDREAM_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(paramsPayload)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error("[DEBUG] Errore da Livepeer durante l'aggiornamento:", JSON.stringify(errorData, null, 2));
+            throw new Error(`API Update Error: ${response.statusText}`);
+        }
+
+        res.status(200).json({ message: "Parametri dello stream aggiornati con successo." });
+
+    } catch (error) {
+        console.error(`❌ Errore API /update-stream-params:`, error);
+        res.status(500).json({ error: "Errore durante l'aggiornamento dei parametri dello stream." });
+    }
+});
+app.post('/theia-update-stream-params', protectRoute, async (req, res) => {
+    const { sessionId, prompt } = req.body;
+    if (!sessionId || !prompt) {
+        return res.status(400).json({ error: "sessionId e prompt sono obbligatori." });
+    }
+    const lighter = `
+      Scrivi una lista in inglese di oggetti, persone, o parole che rappresentano e sintetizzano la seguente frase: "${prompt}"
+    `;
+
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: lighter }],
+        temperature: 0
+      })
+    });
+
+    const data = await r.json();
+    console.log(data.choices?.[0]?.message)
+    let advancedPrompt = data.choices?.[0]?.message?.content
+    console.log(`Nuovo prompt ${advancedPrompt}`)
+    try {
+        const streamId = await getStreamIdBySessionId(db, sessionId);
+        if (!streamId) {
+            return res.status(404).json({ error: "Nessun streamId attivo trovato per questa sessione." });
+        }
+
+        console.log(`[DEBUG] Aggiornamento stream ${streamId} per sessione ${sessionId}`);
+
+        const paramsPayload = { "params": { "prompt": advancedPrompt  } };
         const response = await fetch(`${DAYDREAM_API_BASE_URL}/v1/streams/${streamId}`, {
             method: 'PATCH',
             headers: {
