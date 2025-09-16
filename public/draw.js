@@ -2,10 +2,8 @@
 import { Theia } from './theia.js';
 
 class AppController {
-    // --- Inizializzazione della Classe ---
-
     constructor() {
-        // Stato dell'applicazione
+        this.initialized = false;
         this.socket = null;
         this.sessionId = this._generateSessionId();
         this.currentAudioPartnerSocketId = null;
@@ -14,44 +12,29 @@ class AppController {
         this.canExplore = false;
         this.isTransitioning = false;
         this.theiaInstance = null;
-        this.userWhepUrl = null; // WHEP URL personale dell'utente
-        this.theiaLivepeerConnection = null; // Connessione dedicata per hostare lo stream di Theia
-
-        // Connessioni WebRTC
         this.livepeerConnection = null;
         this.p2pAudioConnection = null;
-
-        // Media Streams
         this.localStream = null;
         this.localAudioSubStream = null;
-
-        // Riferimenti al DOM
         this.originalPlaybackVideo = document.getElementById('playback-video');
         this.localPreviewOverlay = document.getElementById('local-preview-overlay');
         this.updateBtn = document.getElementById('update-params-btn');
         this.promptInput = document.getElementById('prompt');
         this.cameraButton = document.getElementById('camera-button');
         this.controlsSection = document.getElementById('controls-section');
-
-        // Avvio
         this._init();
         document.getElementById('main-title').style.opacity = '0';
     }
 
-    /**
-     * Metodo principale di inizializzazione che avvia l'applicazione.
-     */
     async _init() {
         const isAuthenticated = await this._verifyAuthentication();
         if (!isAuthenticated) {
             console.log("Verifica fallita. Inizializzazione dell'app interrotta.");
             return;
         }
-
         console.log("✅ Autenticazione riuscita. Avvio dell'applicazione...");
         this._setupSocket();
         this._setupEventListeners();
-
         this.main();
     }
 
@@ -102,80 +85,16 @@ class AppController {
             }
             this.handleUpdateParams(e.detail.interpolation);
         });
-
-        // Ascolta l'evento che Theia emette quando il suo audio è pronto
-        document.addEventListener('theiaAudioReady', (e) => {
-            console.log("AppController: Audio di Theia ricevuto, avvio lo stream pubblico per lei.");
-            this.createAndHostTheiaStream(e.detail.stream);
-        });
     }
 
     _setupSocket() {
         this.socket = io();
         this.socket.on('connect', () => {
-            console.log(`Connesso con socket ID: ${this.socket.id}. Sessione: ${this.sessionId}`);
             const newUrl = `${window.location.pathname}?sessionId=${this.sessionId}`;
             window.history.replaceState({ path: newUrl }, '', newUrl);
             this.socket.emit('join-session', this.sessionId);
         });
         this._setupSocketListeners();
-    }
-    /**
-     * NUOVO METODO: Crea e hosta lo stream pubblico per Theia.
-     * @param {MediaStream} theiaAudioStream - Lo stream audio generato da Theia.
-     */
-    async createAndHostTheiaStream(theiaAudioStream) {
-        console.log("Inizio a creare lo stream pubblico per Theia usando l'audio dell'AI...");
-        try {
-            // Ottieni un WHIP URL per la sessione di Theia
-            const response = await fetch('/stream-session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId: 'THEIA_SESSION' })
-            });
-            if (!response.ok) throw new Error(`Errore dal server: ${response.statusText}`);
-            const sessionData = await response.json();
-
-            if (this.theiaLivepeerConnection) this.theiaLivepeerConnection.close();
-            this.theiaLivepeerConnection = new RTCPeerConnection();
-            
-            // Invia solo l'audio di Theia a Livepeer
-            theiaAudioStream.getTracks().forEach(track => this.theiaLivepeerConnection.addTrack(track, theiaAudioStream));
-            
-            const offer = await this.theiaLivepeerConnection.createOffer();
-            await this.theiaLivepeerConnection.setLocalDescription(offer);
-            
-            const whipResponse = await fetch(sessionData.whipUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/sdp' },
-                body: this.theiaLivepeerConnection.localDescription.sdp
-            });
-            if (whipResponse.status !== 201) throw new Error(`Connessione WHIP per Theia fallita: ${whipResponse.statusText}`);
-
-            const whepUrl = whipResponse.headers.get('livepeer-playback-url');
-            if (!whepUrl) throw new Error('Header livepeer-playback-url mancante per Theia.');
-
-            // Aggiorna il DB con il nuovo WHEP URL di Theia, rendendola visibile agli altri
-            await fetch('/update-whep-url', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId: 'THEIA_SESSION', whepUrl })
-            });
-
-            const answerSdp = await whipResponse.text();
-            await this.theiaLivepeerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
-
-            console.log(`✅ Stream pubblico per Theia è attivo e visibile a: ${whepUrl}`);
-            
-            // Mostra lo stream che stiamo hostando nel nostro slide corrente
-            const theiaSlideVideo = document.querySelector(".slide[data-session-id='THEIA_SESSION'] .playback-video");
-            if (theiaSlideVideo) {
-                this.handleStartPlayback(theiaSlideVideo, whepUrl);
-            }
-
-        } catch (error) {
-            console.error("Errore durante la creazione dello stream di Theia:", error);
-        }
     }
 
     _setupSocketListeners() {
@@ -228,7 +147,7 @@ class AppController {
                 this.localAudioSubStream = new MediaStream(this.localStream.getAudioTracks());
                 this.localPreviewOverlay.srcObject = this.localStream;
                 this.localPreviewOverlay.play().catch(e => {});
-                this.localPreviewOverlay.classList.remove('fade-out');
+                this.localPreviewOverlay.style.opacity = '1';
             } else {
                 if (this.localStream) this.localStream.getTracks().forEach(track => track.stop());
                 this.localAudioSubStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -278,6 +197,8 @@ class AppController {
             if (this.canExplore && !this.isSliderViewActive && event.deltaY > 0) {
                 event.preventDefault();
                 window.removeEventListener('wheel', handleInitialScroll);
+                if(this.initialized) return false;
+                this.initialized = true
                 this.switchToSliderView();
             }
         };
@@ -296,27 +217,37 @@ class AppController {
         window.addEventListener('wheel', handleInitialScroll, { passive: false });
         window.addEventListener('touchstart', handleInitialTouch, { passive: false });
     }
+    
 
     transitionToNextStream() {
         if (this.isConfigOverlayActive) this.toggleConfigOverlay();
-        this.hangUp();
         if (this.isTransitioning) return;
+
         const currentSlide = document.querySelector('.slide.is-visible');
         const nextSlide = document.querySelector('.slide:not(.is-visible)');
-        if (!currentSlide || !nextSlide || !(nextSlide.querySelector('video')?.srcObject || nextSlide.dataset.sessionId === 'THEIA_SESSION')) {
+        
+        const hasContent = nextSlide && (nextSlide.querySelector('video')?.srcObject || nextSlide.dataset.sessionId === 'THEIA_SESSION');
+        if (!currentSlide || !nextSlide || !hasContent) {
             return console.warn("Transizione annullata: contenuto non pronto.");
         }
+        
         this.isTransitioning = true;
+        this.hangUp(); 
+        
         nextSlide.style.zIndex = '2';
         nextSlide.classList.add('is-visible');
+
         nextSlide.addEventListener('transitionend', () => {
             this.removeSmooth(currentSlide);
             setTimeout(() => {
                 nextSlide.style.zIndex = '1';
                 this.preloadNextStream();
                 this.isTransitioning = false;
+                
                 const streamerSessionId = nextSlide.dataset.sessionId;
-                if (streamerSessionId !== 'THEIA_SESSION' && this.localAudioSubStream) {
+                if (streamerSessionId === 'THEIA_SESSION' ) {
+                    // TODO: HANDLE THEIA TRANSITION
+                } else if (this.localAudioSubStream) {
                     this.socket.emit('request-audio-call', { streamerSessionId });
                 }
             }, 400);
@@ -335,7 +266,7 @@ class AppController {
         };
         requestAnimationFrame(step);
     }
-
+    
     async preloadNextStream() {
         try {
             const response = await fetch(`/random-stream?excludeSessionId=${this.sessionId}`);
@@ -349,30 +280,27 @@ class AppController {
 
     handleNewRandomStream(streamerSessionId, url) {
         const streamContainer = document.getElementById('stream-container');
-        let targetSlide = document.querySelector(`.slide:not(.is-visible)`);
+        let targetSlide = document.querySelector('.slide:not(.is-visible):not(.is-exiting)');
         if (!targetSlide) {
             targetSlide = document.createElement('div');
             targetSlide.className = 'slide';
             streamContainer.appendChild(targetSlide);
         }
-        
         targetSlide.dataset.sessionId = streamerSessionId;
         targetSlide.innerHTML = `<video class="playback-video" autoplay playsinline muted></video>`;
         const videoEl = targetSlide.querySelector('.playback-video');
 
         if (streamerSessionId === 'THEIA_SESSION') {
-            console.log("🤖 Incontro con Theia. Avvio interazione audio.");
-            if (url) {
-                this.handleStartPlayback(videoEl, url);
-            } else {
-                console.log("Nessuno sta hostando Theia. Divento io l'host.");
-            }
-            if (this.localAudioSubStream) {
+            console.log("🤖 Incontro con Theia. Le passo il controllo del suo video.");
+            if (this.localAudioSubStream && !this.theiaInstance) {
                 this.theiaInstance = new Theia();
-                this.theiaInstance.startConversation(this.localAudioSubStream);
+                this.theiaInstance.startConversation(this.localAudioSubStream, videoEl);
             }
         } else {
             this.handleStartPlayback(videoEl, url);
+            if (this.localAudioSubStream) {
+                this.socket.emit('request-audio-call', { streamerSessionId });
+            }
         }
     }
 
@@ -387,7 +315,12 @@ class AppController {
             if (!response.ok) throw new Error(`Errore dal server: ${response.statusText}`);
             const sessionData = await response.json();
             if (this.livepeerConnection) this.livepeerConnection.close();
-            this.livepeerConnection = new RTCPeerConnection();
+            this.livepeerConnection = new RTCPeerConnection({
+                    iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    ]
+                });
             sourceStream.getTracks().forEach(track => this.livepeerConnection.addTrack(track, sourceStream));
             const offer = await this.livepeerConnection.createOffer();
             await this.livepeerConnection.setLocalDescription(offer);
@@ -397,8 +330,10 @@ class AppController {
                 body: this.livepeerConnection.localDescription.sdp
             });
             if (whipResponse.status !== 201) throw new Error(`Connessione WHIP fallita: ${whipResponse.statusText}`);
-            const whepUrl = whipResponse.headers.get('livepeer-playback-url')?.replace('fra-ai-mediamtx-0.livepeer.com', 'ai.livepeer.com');
+            
+            const whepUrl = whipResponse.headers.get('livepeer-playback-url').replace('fra-ai-mediamtx-0.livepeer.com', 'ai.livepeer.com');
             if (!whepUrl) throw new Error('Header livepeer-playback-url mancante.');
+            
             await fetch('/update-whep-url', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -418,6 +353,7 @@ class AppController {
         if (!targetVideoElement || !whepUrl) return console.error("handleStartPlayback args invalidi.");
         if (targetVideoElement.reconnectTimeoutId) clearTimeout(targetVideoElement.reconnectTimeoutId);
         if (targetVideoElement.peerConnection) targetVideoElement.peerConnection.close();
+        
         const tryToConnect = async (pollInterval) => {
             try {
                 targetVideoElement.reconnectTimeoutId = setTimeout(() => tryToConnect(Math.min(pollInterval + 2000, 30000)), pollInterval);
@@ -429,7 +365,7 @@ class AppController {
                     if (targetVideoElement.srcObject !== event.streams[0]) {
                         targetVideoElement.srcObject = event.streams[0];
                     }
-                    this.localPreviewOverlay.classList.add('fade-out');
+                    this.localPreviewOverlay.style.opacity = '0';
                     this.localPreviewOverlay.addEventListener('transitionend', () => this.localPreviewOverlay.remove(), { once: true });
                     if (targetVideoElement.id === 'playback-video') this.enableExploreMode();
                     if (targetVideoElement.reconnectTimeoutId) { clearTimeout(targetVideoElement.reconnectTimeoutId); targetVideoElement.reconnectTimeoutId = null; }
@@ -440,7 +376,7 @@ class AppController {
                 if (!whepResponse.ok) throw new Error(`Connessione WHEP fallita: ${whepResponse.statusText}`);
                 const answerSdp = await whepResponse.text();
                 await playbackPeerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
-            } catch (error) { console.error(`Connessione fallita per ${whepUrl}. Riprovo tra ${pollInterval}ms`); }
+            } catch (error) { console.error(`Connessione Playback fallita per ${whepUrl}. Riprovo tra ${pollInterval}ms`); }
         };
         tryToConnect(5000);
     }
@@ -512,6 +448,10 @@ class AppController {
             this.theiaLivepeerConnection.close();
             this.theiaLivepeerConnection = null;
             console.log("🛑 Stoppato lo streaming pubblico di Theia.");
+        }
+        if (this.placeholderAudioContext) {
+            this.placeholderAudioContext.close();
+            this.placeholderAudioContext = null;
         }
 
         const remoteAudioEl = document.getElementById('remote-audio');

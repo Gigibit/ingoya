@@ -62,12 +62,15 @@
             <span></span>
         </div>
     </div>
+    <canvas id="theia-canvas"></canvas>
 
     <audio id="remote-audio" autoplay style="display: none;"></audio>
 
     <script>window.selfMode = true</script>
     <script>window.audioManaged = true</script>
     <script src="/socket.io/socket.io.js"></script>
+    <script type="text/javascript" src="dat.gui.min.js"></script>
+    <script type="text/javascript" src="webgl.js"></script>
     <!-- <script type="module" src="screen_debugger.js"></script> -->
     <script type="module" src="interpreter.js"></script>
     <script type="module" src="draw.js"></script>
