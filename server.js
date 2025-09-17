@@ -180,7 +180,7 @@ app.post('/theia-update-stream-params', protectRoute, async (req, res) => {
         return res.status(400).json({ error: "sessionId e prompt sono obbligatori." });
     }
     const lighter = `
-      Scrivi una lista in inglese separata da virgola di oggetti, persone, o parole che rappresentano e sintetizzano la seguente frase: "${prompt}"
+      Sei il generatore di prompt di una pipeline di Stream Diffusion cerca di raccontare in un prompt come rappresentare graficamente questa frase, sii quanto più veloce e sintetica possibile, scrivi solo una frase e in inglese: "${prompt}"
     `;
 
     const r = await fetch("https://api.openai.com/v1/chat/completions", {

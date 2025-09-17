@@ -37,9 +37,18 @@ export class Theia {
       // FASE 1: Ottieni un WHIP URL per lo stream video di Theia
       const streamSessionRes = await fetch('/stream-session', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Accept': 'application/json',
+          'Content-Type': 'application/json' 
+        },
         body: JSON.stringify({ sessionId: 'THEIA_SESSION' })
       });
+      if (streamSessionRes.status === 401) {
+        console.error("Accesso non autorizzato. Reindirizzo al login...");
+        window.location.href = '/'; // O la tua pagina di login
+        return; // Interrompe l'esecuzione della funzione
+      }
+
       if (!streamSessionRes.ok) throw new Error("Errore nel recuperare il whipUrl per Theia");
       const sessionData = await streamSessionRes.json();
       const whipUrl = sessionData.whipUrl;
