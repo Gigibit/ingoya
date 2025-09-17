@@ -16,7 +16,7 @@ export class Theia {
     this.currentAmplifiedStream = null;
     this.theiaVideoSender = null;
     this.theiaAudioSender = null;
-    this.soul = new TheiaSoul(); // Crea un'istanza del visualizer
+    //this.soul = new TheiaSoul(); // Crea un'istanza del visualizer
     this.placeholderAudioElement = null; // Aggiunto per tracciare l'elemento audio del placeholder
   }
 
@@ -155,7 +155,7 @@ export class Theia {
     return dest.stream;
   }
   async callTheia(){
-    const conversationSessionRes = await fetch("/session", { method: "POST" });
+    const conversationSessionRes = await fetch("/theia-session", { method: "POST" });
         if (!conversationSessionRes.ok) throw new Error("Errore creazione sessione per Theia");
         if (!this.conversationConnection || this.conversationConnection.signalingState === "closed") {
           this.conversationConnection = new RTCPeerConnection();
@@ -224,7 +224,7 @@ export class Theia {
     this.outChannel = this.conversationConnection.createDataChannel("oai-events");
     this.outChannel.onmessage = async ev => {
           const msg = JSON.parse(ev.data);
-          console.debug(ev.data)
+          //console.debug(ev.data)
           if(msg.type == 'response.audio_transcript.done'){
               let transcript = msg.transcript
               const response = await fetch('/theia-update-stream-params', {
@@ -237,8 +237,9 @@ export class Theia {
     };
 
     this.outChannel.onopen = async () => {
-      const res = await fetch("/config", { method: "GET" });
-      this.outChannel.send(JSON.stringify(await res.json()));
+      const res = await fetch("/theia-config", { method: "GET" });
+      const m = await res.json();
+      this.outChannel.send(atob(m.i));
     };
   }
 

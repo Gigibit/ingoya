@@ -11,6 +11,8 @@ import createAuthRouter from './auth.router.js';
 import cookieParser from 'cookie-parser';
 import { protectRoute } from './auth.middleware.js';
 
+
+
 // Importa sia il setup che le nuove funzioni di query
 import {
   setupDatabase,
@@ -60,6 +62,22 @@ function generateSessionId(length = 6) {
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static("public"));
+
+
+function getSense (){
+    return 'mouth, taste, lips, tongue'
+    // testing experience
+    const numericalSenseRappresentation = Math.random();
+
+    if( numericalSenseRappresentation < .2 ) return 'see, eyes'
+    if( numericalSenseRappresentation < .4 ) return 'taste, lips, tongue'
+    if( numericalSenseRappresentation < .6 ) return 'listen, ears'
+    if( numericalSenseRappresentation < .8 ) return 'touches, hands'
+    if( numericalSenseRappresentation <= 1 ) return 'smell, nose'
+
+
+
+}
 
 // --- ENDPOINT REST ---
 
@@ -162,7 +180,7 @@ app.post('/theia-update-stream-params', protectRoute, async (req, res) => {
         return res.status(400).json({ error: "sessionId e prompt sono obbligatori." });
     }
     const lighter = `
-      Scrivi una lista in inglese di oggetti, persone, o parole che rappresentano e sintetizzano la seguente frase: "${prompt}"
+      Scrivi una lista in inglese separata da virgola di oggetti, persone, o parole che rappresentano e sintetizzano la seguente frase: "${prompt}"
     `;
 
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -180,8 +198,8 @@ app.post('/theia-update-stream-params', protectRoute, async (req, res) => {
 
     const data = await r.json();
     console.log(data.choices?.[0]?.message)
-    let advancedPrompt = data.choices?.[0]?.message?.content
-    console.log(`Nuovo prompt ${advancedPrompt}`)
+    let advancedPrompt = data.choices?.[0]?.message?.content + `, ${getSense()}`
+    console.log(`🤔 Nuovo prompt ${advancedPrompt}`)
     try {
         const streamId = await getStreamIdBySessionId(db, sessionId);
         if (!streamId) {

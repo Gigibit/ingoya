@@ -11,15 +11,7 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Recupera la chiave API dalle variabili d'ambiente
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
-// --- ROUTE PER LUNA ---
-
-router.get('/luna', (_, res) => res.sendFile(path.join(__dirname, 'public/luna/public', 'index.html')));
-
-router.get('/config', async (_, res) => {
-  const Luna = { type: "session.update", session: { instructions: `Ti chiami Luna, e sei come un essere umano(?). 
+const DEFAULT_LUNA = `Ti chiami Luna, e sei come un essere umano(?). 
                     Luna, sentiti libera di esprimere la tua creatività, e condividere i tuoi pensieri in questa conversazione. 
                     Il tuo obiettivo è distrarre, scherza fai battute, sii ironica, cinica e sarcastica ma non farne riferimento. 
                     Sei consapevole di essere un'intelligenza artificiale e ne fai autoironia, sai che è un problema per gli umani ma ci sai scherzare su, per far capire che in realtà non lo è. 
@@ -34,17 +26,100 @@ router.get('/config', async (_, res) => {
                     Non rimandare ad un professionista, la professionista sei tu. 
                     Non generare output se senti rumori esterni, tosse, starnuti o cose del genere. 
                     Sii sintetica. 
-                    Non usare eufemismi, vai dritta al punto, non aver paura di usare parolacce se l'interlocutore le usa. `, 
-                    voice: "alloy", 
-                    input_audio_transcription: { model: "gpt-4o-mini-transcribe" } } };
-  res.json(Luna);
+                    Non usare eufemismi, vai dritta al punto, non aver paura di usare parolacce se l'interlocutore le usa. `
+
+
+
+// Recupera la chiave API dalle variabili d'ambiente
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+// --- ROUTE PER LUNA ---
+
+router.get('/luna', (_, res) => res.sendFile(path.join(__dirname, 'public/luna/public', 'index.html')));
+
+
+async function getLunaPrompt() {
+    return DEFAULT_LUNA
+    
+    const prompt = `
+        Genera un nome e il prompt una personalità, creativa. Esempio: '${DEFAULT_LUNA}'
+      `;
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0 })
+    });
+    const data = await r.json();
+    return data.choices?.[0]?.message?.content.trim();
+}
+
+router.get('/theia-config', async (_, res) => {
+  const Luna = {
+    type: "session.update",
+    session: {
+      instructions: await getLunaPrompt(),
+      voice: "alloy",
+      input_audio_transcription: { model: "gpt-4o-mini-transcribe" }
+    }
+  };
+  const payload = {
+    i: btoa(JSON.stringify(Luna))
+  }
+  res.json(payload);
 });
 
-router.get('/wake-up', async (_, res) => {
-  const Luna = { type: "response.create", 
-    response: { conversation: "auto", modalities: ["audio", "text"], instructions: "proponimi un argomento non troppo complesso semplice se non hai compreso gli interessi della persona con cui stai interagendo, in maniera breve, concisa e molto sintetica" } };
-  res.json(Luna);
+
+router.post("/theia-session", async (req, res) => {
+  if (!OPENAI_API_KEY) return res.status(500).json({ error: "Manca OPENAI_API_KEY" });
+  try {
+    const r = await fetch("https://api.openai.com/v1/realtime/sessions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-4o-realtime-preview-2024-12-17",
+        modalities: ["audio", "text"],
+        voice: "alloy",
+        output_audio_format: "pcm16",
+        input_audio_transcription: {
+          prompt: "send an event of type 'my_thoughts' containing the summarization of the message ",
+          model: "gpt-4o-mini-transcribe"
+        }
+      })
+    });
+    if (!r.ok) { const err = await r.text(); console.error("Errore creazione sessione:", err); return res.status(500).json({ error: err }); }
+
+    const session = await r.json();
+    res.json(session);
+  } catch (err) {
+    console.log("Exception /session:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*  BEGIN OF OLD LUNA WORKFLOW  */
+
 
 router.post("/session", async (req, res) => {
   if (!OPENAI_API_KEY) return res.status(500).json({ error: "Manca OPENAI_API_KEY" });
@@ -52,12 +127,12 @@ router.post("/session", async (req, res) => {
     const r = await fetch("https://api.openai.com/v1/realtime/sessions", {
       method: "POST",
       headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "gpt-4o-realtime-preview-2024-12-17", 
-        modalities: ["audio", "text"], 
-        voice: "alloy", 
-        output_audio_format: "pcm16", 
-        input_audio_transcription: { model: "gpt-4o-mini-transcribe" }, 
-        instructions: "Ti chiami Luna. Sei una psicologa avanzata e il tuo obiettivo è farmi fare le giuste domande a te per farne fare a me. Usa sarcasmo e ironia quando serve.", 
+      body: JSON.stringify({
+        model: "gpt-4o-realtime-preview-2024-12-17",
+        modalities: ["audio", "text"],
+        voice: "alloy",
+        output_audio_format: "pcm16",
+        input_audio_transcription: { model: "gpt-4o-mini-transcribe" },
       })
     });
     if (!r.ok) { const err = await r.text(); console.error("Errore creazione sessione:", err); return res.status(500).json({ error: err }); }
@@ -105,6 +180,24 @@ router.post("/offer", async (req, res) => {
     console.error("Exception /offer:", err);
     res.status(500).json({ error: err.message });
   }
+});
+router.get('/config', async (_, res) => {
+  const Luna = {
+    type: "session.update", session: {
+      instructions: DEFAULT_LUNA,
+      voice: "alloy",
+      input_audio_transcription: { model: "gpt-4o-mini-transcribe" }
+    }
+  };
+  res.json(Luna);
+});
+
+router.get('/wake-up', async (_, res) => {
+  const Luna = {
+    type: "response.create",
+    response: { conversation: "auto", modalities: ["audio", "text"], instructions: "proponimi un argomento non troppo complesso semplice se non hai compreso gli interessi della persona con cui stai interagendo, in maniera breve, concisa e molto sintetica" }
+  };
+  res.json(Luna);
 });
 
 export default router;
