@@ -1,5 +1,3 @@
-import { TheiaSoul } from "./theia.soul.js";
-
 /**
  * Gestisce la conversazione con un'AI audio e lo streaming del suo output video.
  */
@@ -16,8 +14,7 @@ export class Theia {
     this.currentAmplifiedStream = null;
     this.theiaVideoSender = null;
     this.theiaAudioSender = null;
-    //this.soul = new TheiaSoul(); // Crea un'istanza del visualizer
-    this.placeholderAudioElement = null; // Aggiunto per tracciare l'elemento audio del placeholder
+    this.placeholderAudioElement = null;
   }
 
   /**
@@ -26,37 +23,24 @@ export class Theia {
    * @param {HTMLElement} targetVideoElement - L'elemento <video> in cui mostrare lo stream di Theia.
    */
   async startConversation(inputStream, targetVideoElement) {
-    if (window.theiaDoesExist) return
-    window.theiaDoesExist = true
-    window.bindTheiaDimension(targetVideoElement)
+    if (window.theiaDoesExist) return;
+    window.theiaDoesExist = true;
     if (!inputStream) throw new Error("Input stream per Theia mancante.");
     if (!targetVideoElement) throw new Error("Elemento video di destinazione per Theia mancante.");
 
-    this.inputStream = inputStream
+    this.inputStream = inputStream;
     try {
-      // FASE 1: Ottieni un WHIP URL per lo stream video di Theia
       const streamSessionRes = await fetch('/stream-session', {
         method: 'POST',
-        headers: { 
-          'Accept': 'application/json',
-          'Content-Type': 'application/json' 
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: 'THEIA_SESSION' })
       });
-      if (streamSessionRes.status === 401) {
-        console.error("Accesso non autorizzato. Reindirizzo al login...");
-        window.location.href = '/'; // O la tua pagina di login
-        return; // Interrompe l'esecuzione della funzione
-      }
-
       if (!streamSessionRes.ok) throw new Error("Errore nel recuperare il whipUrl per Theia");
       const sessionData = await streamSessionRes.json();
       const whipUrl = sessionData.whipUrl;
 
-      // FASE 1.5: Avvia lo streaming verso Livepeer e ottieni il WHEP URL
       const whepUrl = await this._startLivepeerStreamWithPlaceholder(whipUrl);
       if (whepUrl) {
-        // FASE 1.6: Avvia il polling per il playback del video di Theia
         this._handlePlayback(targetVideoElement, whepUrl);
       }
 
@@ -65,26 +49,17 @@ export class Theia {
     }
   }
 
-  /**
-   * NUOVO METODO: Genera uno stream audio da un file .wav in loop in modo robusto.
-   * @returns {Promise<MediaStream>} Lo stream audio generato.
-   */
-
-  _createSpectrogramVideoStream(audioStream) {
+  _createSpectrogramVideoStream() {
     const canvas = document.getElementById("theia-canvas");
     return canvas.captureStream();
   }
 
-
   async _startLivepeerStreamWithPlaceholder(whipUrl) {
     try {
       this.livepeerConnection = new RTCPeerConnection();
-      let stream = this._createSpectrogramVideoStream()
-      let streamTrack = stream.getVideoTracks()[0]
+      let stream = this._createSpectrogramVideoStream();
+      let streamTrack = stream.getVideoTracks()[0];
       this.theiaVideoSender = this.livepeerConnection.addTrack(streamTrack, stream);
-
-      // Rimuovi subito la traccia video se vuoi solo audio
-
 
       const offer = await this.livepeerConnection.createOffer();
       await this.livepeerConnection.setLocalDescription(offer);
@@ -110,98 +85,58 @@ export class Theia {
     }
   }
 
-  _createBeepAudioStream(frequency = 440, duration = 0.1) {
-    // 1. Crea un AudioContext
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-    // 2. Crea un OscillatorNode (onda sinusoidale)
-    let oscillator = audioCtx.createOscillator();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
-
-    // 3. Crea un GainNode per controllare il volume
-    const gainNode = audioCtx.createGain();
-    gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime); // volume basso
-
-    // 4. Collega oscillator -> gain -> MediaStreamDestination
-    const dest = audioCtx.createMediaStreamDestination();
-    oscillator.connect(gainNode);
-    gainNode.connect(dest);
-
-    // 5. Configura il beep loop: on/off per il tempo “duration”
-    function startBeepLoop() {
-      oscillator.start();
-      setTimeout(() => {
-        oscillator.stop();
-        // ricrea oscillator per nuovo ciclo
-        const newOsc = audioCtx.createOscillator();
-        newOsc.type = "sine";
-        newOsc.frequency.value = frequency;
-        newOsc.connect(gainNode);
-        oscillator = newOsc;
-        startBeepLoop();
-      }, duration * 1000);
-    }
-    startBeepLoop();
-
-    // 6. Restituisci lo stream
-    return dest.stream;
-  }
-  _createSineAudioStream(frequency = 440) {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator();
-    osc.type = "sine";
-    osc.frequency.value = frequency;
-
-    const gain = audioCtx.createGain();
-    gain.gain.value = 1.0; // volume forte
-
-    osc.connect(gain);
-    const dest = audioCtx.createMediaStreamDestination();
-    gain.connect(dest);
-
-    osc.start();
-    return dest.stream;
-  }
-  async callTheia(){
-    const conversationSessionRes = await fetch("/theia-session", { method: "POST" });
+  async callTheia() {
+    try {
+        const conversationSessionRes = await fetch("/theia-session", { method: "POST" });
         if (!conversationSessionRes.ok) throw new Error("Errore creazione sessione per Theia");
+
         if (!this.conversationConnection || this.conversationConnection.signalingState === "closed") {
-          this.conversationConnection = new RTCPeerConnection();
+            this.conversationConnection = new RTCPeerConnection();
         }
+
         this.inputStream.getTracks().forEach(track => this.conversationConnection.addTrack(track, this.inputStream));
-            this.conversationConnection.ontrack = event => {
-                const remoteStream = event.streams[0]; // Questo è l'audio di Theia
-                console.log("🎤 Theia: prima traccia ricevuta.");
 
-                window.theiaSoul(remoteStream);
+        this.conversationConnection.ontrack = event => {
+            const remoteStream = event.streams[0];
+            console.log("🎤 Theia: prima traccia audio ricevuta.");
 
+            window.theiaSoul(remoteStream);
+
+            if (!this.remoteAudioElement) {
                 this.remoteAudioElement = document.createElement("audio");
-                this.remoteAudioElement.srcObject = remoteStream;
                 this.remoteAudioElement.autoplay = true;
+                // --- MODIFICA: L'audio di Theia ora parte attivo per le istruzioni iniziali ---
+                this.remoteAudioElement.muted = false; 
                 this.remoteAudioElement.style.display = 'none';
                 document.body.appendChild(this.remoteAudioElement);
-            };
+            }
+            this.remoteAudioElement.srcObject = remoteStream;
+            this.remoteAudioElement.play().catch(e => {
+                console.warn("Autoplay di Theia bloccato dal browser, l'utente dovrà interagire con la pagina.", e);
+            });
+        };
 
         this._setupDataChannel();
-        const offer = await this.conversationConnection.createOffer();
+        const offer = await this.conversationConnection.createOffer({ offerToReceiveAudio: true });
         await this.conversationConnection.setLocalDescription(offer);
 
         const offerRes = await fetch("/offer", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sdp: this.conversationConnection.localDescription.sdp })
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sdp: this.conversationConnection.localDescription.sdp })
         });
         if (!offerRes.ok) throw new Error("Errore invio offerta SDP");
         const answer = await offerRes.json();
         await this.conversationConnection.setRemoteDescription({ type: "answer", sdp: answer.sdp });
         console.log("✅ Theia: Connessione audio con AI stabilita.");
-        // --- FINE BLOCCO DISABILITATO ---
-
+    } catch(err) {
+        console.error("❌ Errore in callTheia:", err);
+    }
   }
+
   _handlePlayback(targetVideoElement, whepUrl) {
     if (!targetVideoElement || !whepUrl) return console.error("Theia Playback: argomenti invalidi.");
-    this.callTheia()
+    this.callTheia();
 
     if (this.reconnectTimeoutId) clearTimeout(this.reconnectTimeoutId);
     if (this.playbackConnection) this.playbackConnection.close();
@@ -222,8 +157,6 @@ export class Theia {
         if (!whepResponse.ok) throw new Error(`Connessione WHEP di Theia fallita: ${whepResponse.statusText}`);
         const answerSdp = await whepResponse.text();
         await this.playbackConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
-
-
       } catch (error) { console.error(`Connessione Theia Playback fallita. Riprovo tra ${pollInterval}ms`, error); }
     };
     tryToConnect(5000);
@@ -232,24 +165,60 @@ export class Theia {
   _setupDataChannel() {
     this.outChannel = this.conversationConnection.createDataChannel("oai-events");
     this.outChannel.onmessage = async ev => {
-          const msg = JSON.parse(ev.data);
-          //console.debug(ev.data)
-          if(msg.type == 'response.audio_transcript.done'){
-              let transcript = msg.transcript
-              const response = await fetch('/theia-update-stream-params', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId: 'THEIA_SESSION', prompt: transcript })
-            });
-            if (!response.ok) throw new Error(`Errore dal server: ${response.statusText}`);
-          }
+      const msg = JSON.parse(ev.data);
+      console.log(msg)
+      if (msg.type == 'response.audio_transcript.done') {
+        let transcript = msg.transcript;
+        const response = await fetch('/theia-update-stream-params', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: 'THEIA_SESSION', prompt: transcript })
+        });
+        if (!response.ok) console.error(`Errore aggiornamento parametri Theia: ${response.statusText}`);
+      }
     };
 
     this.outChannel.onopen = async () => {
-      const res = await fetch("/theia-config", { method: "GET" });
-      const m = await res.json();
-      this.outChannel.send(atob(m.i));
+      try {
+        const res = await fetch("/theia-config", { method: "GET" });
+        const m = await res.json();
+        this.outChannel.send(atob(m.i));
+      } catch(err) {
+          console.error("Errore nel setup del datachannel di Theia", err);
+      }
+      const userInteraction = new CustomEvent("userInteraction", {
+            detail: { type: 'onExperienceStarted', isActive: !this.isConfigOverlayActive }
+        });
+      setTimeout(()=> document.dispatchEvent(userInteraction), 1000)
     };
+    document.addEventListener('userInteraction', event =>{
+        switch(event.detail.type){
+          case 'onExperienceStarted':
+              this.outChannel.send(JSON.stringify({
+              type: "response.create",
+              response: {
+                conversation: "auto",
+                modalities: ["audio", "text"],
+                instructions: 'Dammi il benvenuto, e dimmi che questa è una magnifica piattaforma di esplorazione sociale in cui le persone sono quello che fottutamente vogliono essere, qualsiasi cosa o persona vogliano sembrare possono farlo, basta scrivere in quella input box in basso, e per iniziare ad esplorare il mondo, o fermarsi a fare due chiacchiere con te se non è online nessuno, basta scrollare questa pagina di configurazione.'
+              }
+            }));
+            break;
+          case 'onToggleConfigOverlay' :
+            const instructions =  event.detail.isActive ? 
+                                  "Ho cliccato il bottone per configurare il mio volto sulla base di un prompt, fammi compagnia, dimmi che posso sembrare chiunque o qualunque cosa in modo creativo." :
+                                  "Ho ripreso l'esplorazione. caricami andiamo a cercare altri utenti che possono essere qualsaisi essere o cosa vogliono! si parte!";
+              
+            this.outChannel.send(JSON.stringify({
+              type: "response.create",
+              response: {
+                conversation: "auto",
+                modalities: ["audio", "text"],
+                instructions: instructions
+              }
+            }));
+            break;
+        }
+    })
   }
 
   stopConversation() {
@@ -265,3 +234,6 @@ export class Theia {
     console.log("🛑 Theia: Conversazione e streaming terminati.");
   }
 }
+
+
+

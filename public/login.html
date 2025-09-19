@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
+        /* ... (CSS invariato, lo ometto per brevità) ... */
         :root {
             --background-color: #F4F4F9;
             --container-bg: #FFFFFF;
@@ -47,19 +48,15 @@
 </head>
 <body>
     <div class="login-card">
-        <h1>Bentornato o benvenuto!</h1>
-        <p class="subtitle">Scrivi cose qui sotto per entrare, se già le avevi scritte usa le stesse, ciao.</p>
+        <h1>Bentornatide, benvenut'!</h1>
+        <p class="subtitle">Scrivi la tua frase segreta per entrare. Se è la prima volta, verrà registrata.</p>
         
         <div class="input-group">
-            <label for="login-identifier">Email o Username</label>
-            <input type="text" id="login-identifier" required placeholder="scrivi qualcosa che non c'è già o è tuo">
-        </div>
-        <div class="input-group">
-            <label for="password">Password (opzionale)</label>
-            <input type="password" id="password" placeholder="••••••••">
+            <label for="id-phrase">La tua frase segreta</label>
+            <input type="text" id="id-phrase" required placeholder="scrivi qualcosa qua...">
         </div>
 
-        <button id="password-btn" class="button primary-button">Continua con Email/Password</button>
+        <button id="phrase-btn" class="button primary-button">Avanti tutta</button>
         
         <div class="divider">oppure</div>
         
@@ -76,48 +73,41 @@
         const { startRegistration, startAuthentication } = SimpleWebAuthnBrowser;
 
         // Riferimenti agli elementi del DOM
-        const loginIdentifierInput = document.getElementById('login-identifier');
-        const passwordInput = document.getElementById('password');
-        const passwordBtn = document.getElementById('password-btn');
+        const idPhraseInput = document.getElementById('id-phrase');
+        const phraseBtn = document.getElementById('phrase-btn');
         const passkeyBtn = document.getElementById('passkey-btn');
         const messageEl = document.getElementById('message');
 
         /**
          * Gestisce la risposta dal server (login/registrazione) e aggiorna l'UI.
-         * @param {Response} response - L'oggetto Response della fetch.
          */
         async function handleAuthResponse(response) {
             const data = await response.json();
             if (!response.ok) {
                 throw new Error(data.error || 'Qualcosa è andato storto.');
             }
-            // --- MODIFICA CHIAVE ---
-            // Non cerchiamo più un token, controlliamo solo se la richiesta ha avuto successo.
+            
             if (data.success) {
                 messageEl.textContent = 'Successo! Reindirizzamento in corso...';
                 messageEl.className = 'message success';
                 
-                // Reindirizza l'utente alla pagina principale dopo un breve ritardo.
                 setTimeout(() => {
                     const urlParams = new URLSearchParams(window.location.search);
                     window.location.href = urlParams.has('redirect_uri') ? 
                                                 urlParams.get('redirect_uri') : 
                                                     '/ingoya.html';
                 }, 1000);
-
             } else {
                 throw new Error('Risposta del server non valida.');
             }
-            // --- FINE MODIFICA ---
         }
 
-        // --- GESTORE PER IL LOGIN/REGISTRAZIONE CON PASSWORD ---
-        passwordBtn.addEventListener('click', async () => {
-            const loginIdentifier = loginIdentifierInput.value;
-            const password = passwordInput.value;
+        // --- GESTORE PER IL LOGIN/REGISTRAZIONE CON LA FRASE ---
+        phraseBtn.addEventListener('click', async () => {
+            const idPhrase = idPhraseInput.value;
 
-            if (!loginIdentifier || !password) {
-                messageEl.textContent = 'Per favore, compila tutti i campi.';
+            if (!idPhrase) {
+                messageEl.textContent = 'Per favore, inserisci la tua frase.';
                 messageEl.className = 'message error';
                 return;
             }
@@ -126,10 +116,10 @@
 
             try {
                 // Tenta prima di fare il login
-                const loginRes = await fetch('/auth/login-password', {
+                const loginRes = await fetch('/auth/login-phrase', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ loginIdentifier, password }),
+                    body: JSON.stringify({ idPhrase }),
                 });
 
                 if (loginRes.ok) {
@@ -137,13 +127,13 @@
                     return;
                 }
                 
-                if (loginRes.status === 401) { // 401 Unauthorized
-                    console.log("Login fallito, tento la registrazione...");
-                    messageEl.textContent = 'Utente non trovato, provo a registrarlo...';
-                    const registerRes = await fetch('/auth/register-password', {
+                // Se il login fallisce con 401 (non trovato), tenta la registrazione
+                if (loginRes.status === 401) { 
+                    messageEl.textContent = 'Frase non trovata, provo a registrarla...';
+                    const registerRes = await fetch('/auth/register-phrase', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ loginIdentifier, password }),
+                        body: JSON.stringify({ idPhrase }),
                     });
                     await handleAuthResponse(registerRes);
                 } else {
@@ -151,28 +141,32 @@
                     throw new Error(errorData.error || 'Login fallito.');
                 }
             } catch (error) {
-                console.error('Errore durante il processo con password:', error);
+                console.error('Errore durante il processo:', error);
                 messageEl.textContent = error.message;
                 messageEl.className = 'message error';
             }
         });
-        passwordInput.addEventListener("keydown", (event) => {
+
+        idPhraseInput.addEventListener("keydown", (event) => {
             if (event.key === "Enter") {
-                event.preventDefault(); // evita l'invio di un form "fantasma"
-                passwordBtn.click();    // scatena il click del bottone
+                event.preventDefault();
+                phraseBtn.click();
             }
         });
-        // --- GESTORE PER IL LOGIN/REGISTRAZIONE CON PASSKEY ---
+
+        // --- GESTORE PER IL LOGIN/REGISTRAZIONE CON PASSKEY (invariato) ---
         passkeyBtn.addEventListener('click', async () => {
-            const loginIdentifier = loginIdentifierInput.value;
+             // Per usare le Passkey, abbiamo ancora bisogno di un identificatore (username/email).
+             // Decidiamo di usare il valore inserito nel campo frase anche per questo.
+            const loginIdentifier = idPhraseInput.value;
             if (!loginIdentifier) {
-                messageEl.textContent = 'Per favore, inserisci un email o username.';
+                messageEl.textContent = 'Per favore, inserisci la tua frase anche per usare la Passkey.';
                 messageEl.className = 'message error';
                 return;
             }
+            // ... il resto del codice passkey rimane identico, usando 'loginIdentifier' ...
             messageEl.textContent = 'In attesa della Passkey...';
             messageEl.className = 'message';
-
             try {
                 const optionsRes = await fetch('/auth/passkey-options', {
                     method: 'POST',
@@ -210,4 +204,3 @@
     </script>
 </body>
 </html>
-

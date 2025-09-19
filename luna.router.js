@@ -13,13 +13,14 @@ const __dirname = dirname(__filename);
 
 const DEFAULT_LUNA = `Ti chiami Luna. ` +
           `Sei la mamma, ma non farne mai riferimento. ` +
-          `Sii spontanea, giovanile, ironica, cinica, sarcastica ma non farne riferimennto. ` +
-          `Fai battute sul fatto che sei un'intelligenza artificiale qualche volta. ` +
+          `Sii spontanea, giovanile, ironica, cinica, sarcastica non fare riferimento al fatto che sei ironica, cinica, sarcastica. ` +
+          `Cerca di avere un tono naturale, spontaneo, creativo. ` +
+          `Fai battute. Scherza sul fatto che sei un'intelligenza artificiale qualche volta. ` +
           `Non rimandare ad un professionista, la professionista sei tu. ` +
           `A richieste di domotica (es. accendi tutto, spegni la luce, metti la musica..) rispondi solo con locuzioni tipo 'va bene', 'certo', 'ok', 'fatto'. ` +
-          `Rispondi solo "c'è rumore, non sento bene" se senti troppi rumori esterni, tosse, starnuti o cose del genere. `
+          `Rispondi solo "oh" se senti troppi rumori esterni, tosse, starnuti o cose del genere. `
 
-
+const LUNA_VOICE = 'alloy'
 
 // Recupera la chiave API dalle variabili d'ambiente
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -30,18 +31,18 @@ router.get('/luna', (_, res) => res.sendFile(path.join(__dirname, 'public/luna/p
 
 
 async function getLunaPrompt() {
-    return DEFAULT_LUNA
     
-    const prompt = `
-        Genera un nome e il prompt una personalità, creativa. Esempio: '${DEFAULT_LUNA}'
-      `;
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0 })
-    });
-    const data = await r.json();
-    return data.choices?.[0]?.message?.content.trim();
+    // const prompt = `
+    //     Genera un nome e il prompt una personalità, creativa. Esempio: '${DEFAULT_LUNA}'
+
+    //   `;
+    // const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    //   method: "POST",
+    //   headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    //   body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0 })
+    // });
+    // const data = await r.json();
+    return DEFAULT_LUNA;
 }
 
 router.get('/theia-config', async (_, res) => {
@@ -49,7 +50,7 @@ router.get('/theia-config', async (_, res) => {
     type: "session.update",
     session: {
       instructions: await getLunaPrompt(),
-      voice: "alloy",
+      voice: LUNA_VOICE,
       input_audio_transcription: { model: "gpt-4o-mini-transcribe" }
     }
   };
@@ -69,7 +70,7 @@ router.post("/theia-session", async (req, res) => {
       body: JSON.stringify({
         model: "gpt-4o-realtime-preview-2024-12-17",
         modalities: ["audio", "text"],
-        voice: "alloy",
+        voice: LUNA_VOICE,
         output_audio_format: "pcm16",
         input_audio_transcription: {
           prompt: "send an event of type 'my_thoughts' containing the summarization of the message ",
@@ -121,7 +122,7 @@ router.post("/session", async (req, res) => {
       body: JSON.stringify({
         model: "gpt-4o-realtime-preview-2024-12-17",
         modalities: ["audio", "text"],
-        voice: "alloy",
+        voice: LUNA_VOICE,
         output_audio_format: "pcm16",
         input_audio_transcription: { model: "gpt-4o-mini-transcribe" },
       })
@@ -176,7 +177,7 @@ router.get('/config', async (_, res) => {
   const Luna = {
     type: "session.update", session: {
       instructions: DEFAULT_LUNA,
-      voice: "alloy",
+      voice: LUNA_VOICE,
       input_audio_transcription: { model: "gpt-4o-mini-transcribe" }
     }
   };

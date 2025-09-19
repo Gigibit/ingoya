@@ -3,7 +3,6 @@ import { Theia } from './theia.js';
 
 class AppController {
     constructor() {
-        this.initialized = false;
         this.socket = null;
         this.sessionId = this._generateSessionId();
         this.currentAudioPartnerSocketId = null;
@@ -12,16 +11,25 @@ class AppController {
         this.canExplore = false;
         this.isTransitioning = false;
         this.theiaInstance = null;
+        this.theiaAudioFader = null; // Per gestire l'intervallo del fade
+
         this.livepeerConnection = null;
         this.p2pAudioConnection = null;
         this.localStream = null;
         this.localAudioSubStream = null;
+
+        // Elementi DOM
         this.originalPlaybackVideo = document.getElementById('playback-video');
         this.localPreviewOverlay = document.getElementById('local-preview-overlay');
         this.updateBtn = document.getElementById('update-params-btn');
         this.promptInput = document.getElementById('prompt');
         this.cameraButton = document.getElementById('camera-button');
         this.controlsSection = document.getElementById('controls-section');
+        this.loader = document.getElementById('loader');
+        
+        this.theiaSlide = document.getElementById('theia-slide');
+        this.streamContainer = null;
+
         this._init();
         document.getElementById('main-title').style.opacity = '0';
     }
@@ -37,6 +45,47 @@ class AppController {
         this._setupEventListeners();
         this.main();
     }
+    
+    // --- NUOVA FUNZIONE PER IL FADE AUDIO ---
+    _fadeAudio(shouldFadeOut) {
+        if (!this.theiaInstance || !this.theiaInstance.remoteAudioElement) return;
+
+        clearInterval(this.theiaAudioFader); // Interrompe eventuali fade precedenti
+        const audioEl = this.theiaInstance.remoteAudioElement;
+        const fadeDuration = 500; // 0.5 secondi
+        const intervalTime = 25;
+        const steps = fadeDuration / intervalTime;
+        let currentStep = 0;
+
+        if (shouldFadeOut) {
+            let startVolume = audioEl.volume;
+            this.theiaAudioFader = setInterval(() => {
+                currentStep++;
+                const newVolume = startVolume * (1 - (currentStep / steps));
+                if (newVolume <= 0.05 || currentStep > steps) {
+                    audioEl.volume = 0;
+                    clearInterval(this.theiaAudioFader);
+                } else {
+                    audioEl.volume = newVolume;
+                }
+            }, intervalTime);
+        } else { // Fade In
+            //audioEl.muted = false; // Rimuove il muto hardware
+
+            let startVolume = audioEl.volume; // Probabilmente è 0
+             this.theiaAudioFader = setInterval(() => {
+                currentStep++;
+                const newVolume = startVolume + ((1 - startVolume) * (currentStep / steps));
+                 if (newVolume >= 0.95 || currentStep > steps) {
+                    audioEl.volume = 1;
+                    clearInterval(this.theiaAudioFader);
+                } else {
+                    audioEl.volume = newVolume;
+                }
+            }, intervalTime);
+        }
+    }
+
 
     _generateSessionId(length = 6) {
         const urlParams = new URLSearchParams(window.location.search);
@@ -53,8 +102,7 @@ class AppController {
         try {
             const response = await fetch('/random-stream?excludeSessionId=auth-check', { redirect: 'manual' });
             if (response.type === 'opaqueredirect' || response.status === 401) {
-                window.location.href = '/';
-                return false;
+                window.location.href = '/'; return false;
             }
             if (!response.ok && response.status !== 404) {
                 throw new Error('Errore del server durante la verifica del token.');
@@ -62,8 +110,7 @@ class AppController {
             return true;
         } catch (error) {
             console.error("Errore durante la verifica dell'autenticazione:", error);
-            window.location.href = '/';
-            return false;
+            window.location.href = '/'; return false;
         }
     }
 
@@ -71,12 +118,17 @@ class AppController {
         this.cameraButton.addEventListener('click', () => this.main());
         this.updateBtn.addEventListener('click', () => this.handleUpdateParams());
         this.originalPlaybackVideo.addEventListener('click', () => {
-            if (this.isSliderViewActive) this.toggleConfigOverlay();
+            if (this.isSliderViewActive){ 
+                this.toggleConfigOverlay();
+                const userInteraction = new CustomEvent("userInteraction", {
+                    detail: { type: 'onToggleConfigOverlay', isActive: !this.isConfigOverlayActive }
+                });
+                document.dispatchEvent(userInteraction);
+            }
         });
         this.promptInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !this.updateBtn.disabled) {
-                e.preventDefault();
-                this.handleUpdateParams();
+                e.preventDefault(); this.handleUpdateParams();
             }
         });
         document.addEventListener('usermessageinterpolation', (e) => {
@@ -131,30 +183,46 @@ class AppController {
     }
 
     async main() {
+        if (this.localStream) return;
         await this.toggleVideoSource();
         if (this.localStream) {
             await this.getOrCreateStreamSession(this.localStream);
         }
     }
+    
+    _preloadTheia() {
+        if (this.theiaInstance || !this.localAudioSubStream) return;
+        console.log("🤖 Pre-caricamento di Theia in background...");
+        this.theiaInstance = new Theia();
+        const theiaVideoEl = this.theiaSlide.querySelector('.playback-video');
+        this.theiaInstance.startConversation(this.localAudioSubStream, theiaVideoEl);
+
+    }
+
 
     async toggleVideoSource() {
         this.cameraButton.classList.toggle('camera-enabled');
         const isCameraActive = this.cameraButton.classList.contains('camera-enabled');
         const canvasContainer = document.getElementById('canvas-container');
         try {
+            if (this.localStream) this.localStream.getTracks().forEach(track => track.stop());
+
             if (isCameraActive) {
                 this.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 this.localAudioSubStream = new MediaStream(this.localStream.getAudioTracks());
                 this.localPreviewOverlay.srcObject = this.localStream;
                 this.localPreviewOverlay.play().catch(e => {});
                 this.localPreviewOverlay.style.opacity = '1';
+                if(canvasContainer) canvasContainer.style.display = 'none';
             } else {
-                if (this.localStream) this.localStream.getTracks().forEach(track => track.stop());
                 this.localAudioSubStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 if (canvasContainer) canvasContainer.style.display = 'block';
                 const fluidCanvas = document.getElementById('fluidCanvas');
                 const canvasStream = fluidCanvas.captureStream();
                 this.localStream = new MediaStream([...canvasStream.getVideoTracks(), ...this.localAudioSubStream.getAudioTracks()]);
+                this.localPreviewOverlay.srcObject = this.localStream;
+                this.localPreviewOverlay.play().catch(e => {});
+                this.localPreviewOverlay.style.opacity = '1';
             }
         } catch (err) {
             console.error("Accesso a media fallito:", err);
@@ -165,22 +233,23 @@ class AppController {
         if (this.isSliderViewActive) return;
         this.isSliderViewActive = true;
         document.body.classList.add('slider-view-active');
-        const streamContainer = document.createElement('div');
-        streamContainer.id = 'stream-container';
-        const preloadedSlide = document.getElementById('random-stream-slide');
-        preloadedSlide.classList.add('is-visible');
-        streamContainer.appendChild(preloadedSlide);
-        document.body.appendChild(streamContainer);
+        
+        this.streamContainer = document.createElement('div');
+        this.streamContainer.id = 'stream-container';
+        document.body.appendChild(this.streamContainer);
+
         this.originalPlaybackVideo.classList.add('mini-video');
         document.body.appendChild(this.originalPlaybackVideo);
-        this.preloadNextStream();
         this.controlsSection.style.opacity = '0';
+        
+        this.findNextExperience();
+
         let touchStartY = 0;
-        window.addEventListener('wheel', (event) => { if (event.deltaY > 0) this.transitionToNextStream(); }, { passive: false });
-        window.addEventListener('touchstart', (e) => { touchStartY = e.changedTouches[0].screenY; }, { passive: false });
+        window.addEventListener('wheel', (event) => { if (event.deltaY > 0) this.findNextExperience(); }, { passive: true });
+        window.addEventListener('touchstart', (e) => { touchStartY = e.changedTouches[0].screenY; }, { passive: true });
         window.addEventListener('touchend', (e) => {
-            if (touchStartY - e.changedTouches[0].screenY > 50) this.transitionToNextStream();
-        }, { passive: false });
+            if (touchStartY - e.changedTouches[0].screenY > 50) this.findNextExperience();
+        }, { passive: true });
     }
 
     toggleConfigOverlay() {
@@ -193,115 +262,107 @@ class AppController {
     enableExploreMode() {
         if (this.canExplore) return;
         this.canExplore = true;
-        const handleInitialScroll = (event) => {
-            if (this.canExplore && !this.isSliderViewActive && event.deltaY > 0) {
-                event.preventDefault();
-                window.removeEventListener('wheel', handleInitialScroll);
-                if(this.initialized) return false;
-                this.initialized = true
-                this.switchToSliderView();
+        const handleInitialAction = () => {
+             if (this.isSliderViewActive) return;
+             window.removeEventListener('wheel', handleInitialAction);
+             window.removeEventListener('touchend', handleInitialAction);
+             this.switchToSliderView();
+        };
+        window.addEventListener('wheel', handleInitialAction, { once: true, passive: true });
+        window.addEventListener('touchend', handleInitialAction, { once: true, passive: true });
+    }
+
+    async findNextExperience() {
+        if (this.isTransitioning) return;
+        this.isTransitioning = true;
+        this.hangUp();
+
+        this.loader.style.display = 'flex';
+
+        const findUserPromise = fetch(`/random-stream?excludeSessionId=${this.sessionId}`);
+        const timeoutPromise = new Promise(resolve => setTimeout(resolve, 2500));
+
+        try {
+            const [response] = await Promise.all([findUserPromise, timeoutPromise]);
+            
+            if (!response.ok) {
+                console.warn("Nessun utente trovato o errore server, mostro Theia.");
+                this.transitionToSlide(this.theiaSlide);
+                return;
             }
-        };
-        const handleInitialTouch = (e) => {
-            if (!this.canExplore || this.isSliderViewActive) return;
-            const touchStartY = e.changedTouches[0].screenY;
-            const onTouchEnd = (endEvent) => {
-                if (touchStartY - endEvent.changedTouches[0].screenY > 50) {
-                    window.removeEventListener('touchend', onTouchEnd);
-                    window.removeEventListener('wheel', handleInitialScroll);
-                    this.switchToSliderView();
-                }
-            };
-            window.addEventListener('touchend', onTouchEnd, { passive: false });
-        };
-        window.addEventListener('wheel', handleInitialScroll, { passive: false });
-        window.addEventListener('touchstart', handleInitialTouch, { passive: false });
+
+            const data = await response.json();
+
+            if (data.sessionId && data.sessionId !== 'THEIA_SESSION') {
+                console.log(`👤 Trovato utente umano: ${data.sessionId}`);
+                const userSlide = this._createSlideForStream(data.sessionId, data.whepUrl);
+                this.transitionToSlide(userSlide);
+            } else {
+                console.log("🤔 Nessun utente umano disponibile, mostro Theia.");
+                this.transitionToSlide(this.theiaSlide);
+            }
+
+        } catch (err) {
+            console.error("Errore in findNextExperience, mostro Theia come fallback:", err);
+            this.transitionToSlide(this.theiaSlide);
+        }
     }
     
-
-    transitionToNextStream() {
-        if (this.isConfigOverlayActive) this.toggleConfigOverlay();
-        if (this.isTransitioning) return;
-
-        const currentSlide = document.querySelector('.slide.is-visible');
-        const nextSlide = document.querySelector('.slide:not(.is-visible)');
+    _createSlideForStream(sessionId, whepUrl) {
+        const slide = document.createElement('div');
+        slide.className = 'slide';
+        slide.dataset.sessionId = sessionId;
+        slide.innerHTML = `<video class="playback-video" autoplay playsinline muted></video>`;
+        this.streamContainer.appendChild(slide);
         
-        const hasContent = nextSlide && (nextSlide.querySelector('video')?.srcObject || nextSlide.dataset.sessionId === 'THEIA_SESSION');
-        if (!currentSlide || !nextSlide || !hasContent) {
-            return console.warn("Transizione annullata: contenuto non pronto.");
+        const videoEl = slide.querySelector('.playback-video');
+        this.handleStartPlayback(videoEl, whepUrl);
+        return slide;
+    }
+
+
+    transitionToSlide(nextSlide) {
+        this.loader.style.display = 'none';
+        const currentSlide = this.streamContainer.querySelector('.is-visible');
+
+        if (currentSlide === nextSlide) {
+            this.isTransitioning = false;
+            return;
         }
         
-        this.isTransitioning = true;
-        this.hangUp(); 
-        
-        nextSlide.style.zIndex = '2';
-        nextSlide.classList.add('is-visible');
+        // --- MODIFICA CHIAVE: Gestione fade audio ---
+        if (nextSlide.dataset.sessionId === 'THEIA_SESSION') {
+            this._fadeAudio(false); // Fade IN
+        } else if (currentSlide && currentSlide.dataset.sessionId === 'THEIA_SESSION') {
+            this._fadeAudio(true); // Fade OUT
+        }
 
-        nextSlide.addEventListener('transitionend', () => {
-            this.removeSmooth(currentSlide);
+        if (nextSlide.parentElement !== this.streamContainer) {
+             this.streamContainer.appendChild(nextSlide);
+        }
+        nextSlide.style.display = 'block';
+        
+        requestAnimationFrame(() => {
+            nextSlide.classList.add('is-visible');
+            if (currentSlide) {
+                currentSlide.classList.remove('is-visible');
+                currentSlide.addEventListener('transitionend', () => {
+                    if (currentSlide !== this.theiaSlide) {
+                        currentSlide.remove();
+                    } else {
+                        currentSlide.style.display = 'none';
+                    }
+                }, { once: true });
+            }
+    
             setTimeout(() => {
-                nextSlide.style.zIndex = '1';
-                this.preloadNextStream();
                 this.isTransitioning = false;
-                
                 const streamerSessionId = nextSlide.dataset.sessionId;
-                if (streamerSessionId === 'THEIA_SESSION' ) {
-                    // TODO: HANDLE THEIA TRANSITION
-                } else if (this.localAudioSubStream) {
+                if (streamerSessionId !== 'THEIA_SESSION' && this.localAudioSubStream) {
                     this.socket.emit('request-audio-call', { streamerSessionId });
                 }
-            }, 400);
-        }, { once: true });
-    }
-
-    removeSmooth(element) {
-        const start = performance.now();
-        const step = (timestamp) => {
-            let progress = (timestamp - start) / 600;
-            if (progress > 1) progress = 1;
-            element.style.opacity = String(1 - progress);
-            element.style.transform = `scale(${1 - 0.05 * progress})`;
-            if (progress < 1) requestAnimationFrame(step);
-            else element.remove();
-        };
-        requestAnimationFrame(step);
-    }
-    
-    async preloadNextStream() {
-        try {
-            const response = await fetch(`/random-stream?excludeSessionId=${this.sessionId}`);
-            if (!response.ok) throw new Error(`Errore di rete: ${response.statusText}`);
-            const data = await response.json();
-            this.handleNewRandomStream(data.sessionId, data.whepUrl);
-        } catch (err) {
-            console.error("Errore preloadNextStream:", err);
-        }
-    }
-
-    handleNewRandomStream(streamerSessionId, url) {
-        const streamContainer = document.getElementById('stream-container');
-        let targetSlide = document.querySelector('.slide:not(.is-visible):not(.is-exiting)');
-        if (!targetSlide) {
-            targetSlide = document.createElement('div');
-            targetSlide.className = 'slide';
-            streamContainer.appendChild(targetSlide);
-        }
-        targetSlide.dataset.sessionId = streamerSessionId;
-        targetSlide.innerHTML = `<video class="playback-video" autoplay playsinline muted></video>`;
-        const videoEl = targetSlide.querySelector('.playback-video');
-
-        if (streamerSessionId === 'THEIA_SESSION') {
-            console.log("🤖 Incontro con Theia. Le passo il controllo del suo video.");
-            if (this.localAudioSubStream && !this.theiaInstance) {
-                this.theiaInstance = new Theia();
-                this.theiaInstance.startConversation(this.localAudioSubStream, videoEl);
-            }
-        } else {
-            this.handleStartPlayback(videoEl, url);
-            if (this.localAudioSubStream) {
-                this.socket.emit('request-audio-call', { streamerSessionId });
-            }
-        }
+            }, 500);
+        });
     }
 
     async getOrCreateStreamSession(sourceStream) {
@@ -315,12 +376,7 @@ class AppController {
             if (!response.ok) throw new Error(`Errore dal server: ${response.statusText}`);
             const sessionData = await response.json();
             if (this.livepeerConnection) this.livepeerConnection.close();
-            this.livepeerConnection = new RTCPeerConnection({
-                    iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    ]
-                });
+            this.livepeerConnection = new RTCPeerConnection();
             sourceStream.getTracks().forEach(track => this.livepeerConnection.addTrack(track, sourceStream));
             const offer = await this.livepeerConnection.createOffer();
             await this.livepeerConnection.setLocalDescription(offer);
@@ -343,7 +399,10 @@ class AppController {
             await this.livepeerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
             this.updateBtn.disabled = false;
             this.handleStartPlayback(this.originalPlaybackVideo, whepUrl);
+            
+            this._preloadTheia();
             this.enableExploreMode();
+
         } catch (error) {
             console.error('Errore getOrCreateStreamSession:', error);
         }
@@ -360,17 +419,17 @@ class AppController {
                 const playbackPeerConnection = new RTCPeerConnection();
                 targetVideoElement.peerConnection = playbackPeerConnection;
                 playbackPeerConnection.ontrack = (event) => {
-                    const loader = document.getElementById('loader');
-                    if (loader) loader.style.display = 'none';
+                    if (targetVideoElement.id === 'playback-video') {
+                        this.loader.style.display = 'none';
+                        this.localPreviewOverlay.style.opacity = '0';
+                        this.localPreviewOverlay.addEventListener('transitionend', () => this.localPreviewOverlay.remove(), { once: true });
+                    }
                     if (targetVideoElement.srcObject !== event.streams[0]) {
                         targetVideoElement.srcObject = event.streams[0];
                     }
-                    this.localPreviewOverlay.style.opacity = '0';
-                    this.localPreviewOverlay.addEventListener('transitionend', () => this.localPreviewOverlay.remove(), { once: true });
-                    if (targetVideoElement.id === 'playback-video') this.enableExploreMode();
                     if (targetVideoElement.reconnectTimeoutId) { clearTimeout(targetVideoElement.reconnectTimeoutId); targetVideoElement.reconnectTimeoutId = null; }
                 };
-                const offer = await playbackPeerConnection.createOffer({ offerToReceiveVideo: true });
+                const offer = await playbackPeerConnection.createOffer({ offerToReceiveVideo: true, offerToReceiveAudio: true });
                 await playbackPeerConnection.setLocalDescription(offer);
                 const whepResponse = await fetch(whepUrl, { method: 'POST', headers: { 'Content-Type': 'application/sdp' }, body: playbackPeerConnection.localDescription.sdp });
                 if (!whepResponse.ok) throw new Error(`Connessione WHEP fallita: ${whepResponse.statusText}`);
@@ -380,7 +439,7 @@ class AppController {
         };
         tryToConnect(5000);
     }
-
+    
     async handleUpdateParams(promptText) {
         const prompt = promptText || this.promptInput.value;
         if (!prompt) return;
@@ -403,8 +462,7 @@ class AppController {
 
     setupAudioPeerConnection() {
         if (this.p2pAudioConnection) this.p2pAudioConnection.close();
-        const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-        this.p2pAudioConnection = new RTCPeerConnection(configuration);
+        this.p2pAudioConnection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
         this.localAudioSubStream.getTracks().forEach(track => {
             this.p2pAudioConnection.addTrack(track, this.localAudioSubStream);
         });
@@ -414,7 +472,6 @@ class AppController {
                 remoteAudioEl = document.createElement('audio');
                 remoteAudioEl.id = 'remote-audio';
                 remoteAudioEl.autoplay = true;
-                remoteAudioEl.style.display = 'none';
                 document.body.appendChild(remoteAudioEl);
             }
             if (remoteAudioEl.srcObject !== event.streams[0]) {
@@ -440,20 +497,9 @@ class AppController {
             this.p2pAudioConnection.close();
             this.p2pAudioConnection = null;
         }
-        if (this.theiaInstance) {
-            this.theiaInstance.stopConversation();
-            this.theiaInstance = null;
-        }
-        if (this.theiaLivepeerConnection) {
-            this.theiaLivepeerConnection.close();
-            this.theiaLivepeerConnection = null;
-            console.log("🛑 Stoppato lo streaming pubblico di Theia.");
-        }
-        if (this.placeholderAudioContext) {
-            this.placeholderAudioContext.close();
-            this.placeholderAudioContext = null;
-        }
-
+        
+        // La gestione audio di Theia è ora fatta con _fadeAudio(), quindi non serve altro qui.
+        
         const remoteAudioEl = document.getElementById('remote-audio');
         if (remoteAudioEl) remoteAudioEl.remove();
         this.currentAudioPartnerSocketId = null;
@@ -461,4 +507,5 @@ class AppController {
 }
 
 window.addEventListener('DOMContentLoaded', () => new AppController());
+
 

@@ -222,6 +222,20 @@ function pointerPrototype() {
 
 let pointers = [];
 let splatStack = [];
+let automatedPointer = {
+    active: false,
+    pointer: null, // Riferimento al puntatore che stiamo controllando
+    startX: 0,
+    startY: 0,
+    endX: 0,
+    endY: 0,
+    progress: 0,
+    duration: 0,
+    life: 0
+};
+let automatedDragTimer = 0.0;
+// Inizia il primo trascinamento dopo 2-5 secondi
+let nextDragTime = 1.0 + Math.random() * 3.0;
 pointers.push(new pointerPrototype());
 let audioPointer = new pointerPrototype();
 
@@ -1186,29 +1200,24 @@ function update() {
     if (resizeCanvas())
         initFramebuffers();
     updateColors(dt);
-    // Controlla se è il momento di un'esplosione automatica, solo se non è in pausa
+    
+    // NUOVA LOGICA: Aggiorna il nostro puntatore simulato
     if (!config.PAUSED) {
-        autoExplosionTimer += dt;
-        if (autoExplosionTimer >= nextExplosionTime) {
-            // Esegue un'esplosione con un numero casuale di "splat"
-            multipleSplats(parseInt(Math.random() * 10) + 10);
-
-            // Resetta il timer e imposta un nuovo intervallo casuale per la prossima esplosione
-            autoExplosionTimer = 0.0;
-            nextExplosionTime = 5.0 + Math.random() * 10.0; // Prossima tra 5 e 15 secondi
-        }
+        updateAutomatedDrag(dt);
     }
+
     applyInputs();
 
     // Integriamo l'analisi audio nel loop principale
-    analyzeAudio();
-
+    if (analyser) { // Esegui solo se l'audio è stato inizializzato
+        analyzeAudio();
+    }
+    
     if (!config.PAUSED)
         step(dt);
     render(null);
     requestAnimationFrame(update);
 }
-
 function calcDeltaTime() {
     let now = Date.now();
     let dt = (now - lastUpdateTime) / 1000;
@@ -1501,7 +1510,85 @@ function splat(x, y, dx, dy, color) {
     blit(dye.write);
     dye.swap();
 }
+/**
+ * Inizia un nuovo trascinamento automatico con parametri casuali.
+ */
+function startAutomatedDrag() {
+    // Seleziona il primo puntatore disponibile per la nostra simulazione
+    let pointer = pointers[0];
+    if (pointer == null) return; // Non fare nulla se non ci sono puntatori
 
+    // Imposta lo stato del nostro bot
+    automatedPointer.active = true;
+    automatedPointer.pointer = pointer;
+    automatedPointer.startX = Math.random();
+    automatedPointer.startY = Math.random();
+    automatedPointer.endX = Math.random();
+    automatedPointer.endY = Math.random();
+    automatedPointer.duration = 2.0 + Math.random() * 5.0; // Durata tra 2 e 5 secondi
+    automatedPointer.life = automatedPointer.duration;
+    automatedPointer.progress = 0;
+
+    // Simula il "touchstart": calcola la posizione iniziale in pixel
+    const startPosX = automatedPointer.startX * canvas.width;
+    const startPosY = (1.0 - automatedPointer.startY) * canvas.height;
+    
+    // Attiva il puntatore
+    updatePointerDownData(pointer, -1, startPosX, startPosY);
+}
+
+/**
+ * Aggiorna la posizione del puntatore automatico durante il suo ciclo di vita.
+ * @param {number} dt Delta time dall'ultimo frame.
+ */
+function updateAutomatedDrag(dt) {
+    // Controlla se è ora di iniziare un nuovo trascinamento
+    automatedDragTimer += dt;
+    if (!automatedPointer.active && automatedDragTimer >= nextDragTime) {
+        startAutomatedDrag();
+        automatedDragTimer = 0;
+        // Prossimo drag tra 4 e 8 secondi
+        nextDragTime = 4.0 + Math.random() * 4.0; 
+    }
+
+    // Se non c'è un drag attivo, esci
+    if (!automatedPointer.active) return;
+    
+    // Aggiorna il tempo di vita
+    automatedPointer.life -= dt;
+
+    // Se il tempo è scaduto, termina il trascinamento
+    if (automatedPointer.life <= 0) {
+        automatedPointer.active = false;
+        // Simula il "touchend"
+        updatePointerUpData(automatedPointer.pointer);
+        return;
+    }
+
+    // Calcola il progresso del percorso (da 0 a 1)
+    automatedPointer.progress = 1.0 - (automatedPointer.life / automatedPointer.duration);
+    
+    // Funzione di interpolazione per un movimento più morbido (ease-in-out)
+    const easedProgress = automatedPointer.progress < 0.5 
+        ? 2 * automatedPointer.progress * automatedPointer.progress 
+        : 1 - Math.pow(-2 * automatedPointer.progress + 2, 2) / 2;
+
+    // Interpola linearmente le coordinate
+    let currentX = automatedPointer.startX + (automatedPointer.endX - automatedPointer.startX) * easedProgress;
+    let currentY = automatedPointer.startY + (automatedPointer.endY - automatedPointer.startY) * easedProgress;
+    
+    // Aggiungi un po' di movimento ondulatorio per renderlo più organico
+    currentX += Math.sin(easedProgress * Math.PI * 4) * 0.05; // 4 oscillazioni complete
+    currentY += Math.cos(easedProgress * Math.PI * 4) * 0.05;
+
+    // Simula il "touchmove": calcola la posizione corrente in pixel
+    const currentPosX = currentX * canvas.width;
+    // Ricorda che la coordinata Y per il canvas è invertita (0 è in alto)
+    const currentPosY = (1.0 - currentY) * canvas.height; 
+
+    // Aggiorna i dati del puntatore, che causerà lo "splat" nel prossimo applyInputs()
+    updatePointerMoveData(automatedPointer.pointer, currentPosX, currentPosY);
+}
 function correctRadius(radius) {
     let aspectRatio = canvas.width / canvas.height;
     if (aspectRatio > 1)
@@ -1615,8 +1702,21 @@ function correctDeltaY(delta) {
 }
 
 function generateColor() {
-    // Genera una tonalità (hue) solo nell'intervallo dei magenta/viola/rosa
-    const hue = 0.75 + Math.random() * 0.2; // Range da 0.75 a 0.95
+    let hue;
+
+    // Definiamo una probabilità.
+    // Es: 80% di probabilità di avere un colore della palette principale (magenta/viola).
+    const mainPaletteProbability = 0.60;
+
+    if (Math.random() < mainPaletteProbability) {
+        // CASO 1 (più comune): Genera una tonalità nell'intervallo dei magenta/viola/rosa.
+        hue = 0.75 + Math.random() * 0.2; // Range da 0.75 (viola) a 0.95 (rosa/magenta)
+    } else {
+        // CASO 2 (meno comune): Genera una tonalità completamente casuale per avere varietà.
+        hue = Math.random();
+    }
+
+    // Il resto della funzione rimane invariato
     let c = HSVtoRGB(hue, 1.0, 1.0);
     c.r *= 0.15;
     c.g *= 0.15;
@@ -1702,4 +1802,3 @@ function hashCode(s) {
 
 //TODO: MAKE A CLASS
 window.theiaSoul = initAudio
-window.bindTheiaDimension = resizeCanvas
