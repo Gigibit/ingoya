@@ -47,12 +47,12 @@
 </head>
 <body>
     <div class="login-card">
-        <h1>Bentornato!</h1>
-        <p class="subtitle">Accedi o registrati per continuare.</p>
+        <h1>Bentornato o benvenuto!</h1>
+        <p class="subtitle">Scrivi cose qui sotto per entrare, se già le avevi scritte usa le stesse, ciao.</p>
         
         <div class="input-group">
             <label for="login-identifier">Email o Username</label>
-            <input type="text" id="login-identifier" required placeholder="mario.rossi / tuamail@esempio.com">
+            <input type="text" id="login-identifier" required placeholder="scrivi qualcosa che non c'è già o è tuo">
         </div>
         <div class="input-group">
             <label for="password">Password (opzionale)</label>
@@ -99,7 +99,10 @@
                 
                 // Reindirizza l'utente alla pagina principale dopo un breve ritardo.
                 setTimeout(() => {
-                    window.location.href = '/ingoya.html';
+                    const urlParams = new URLSearchParams(window.location.search);
+                    window.location.href = urlParams.has('redirect_uri') ? 
+                                                urlParams.get('redirect_uri') : 
+                                                    '/ingoya.html';
                 }, 1000);
 
             } else {
