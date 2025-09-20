@@ -139,7 +139,7 @@ export class Theia {
 
   _handlePlayback(targetVideoElement, whepUrl) {
     if (!targetVideoElement || !whepUrl) return console.error("Theia Playback: argomenti invalidi.");
-    //this.callTheia();
+    this.callTheia();
 
     if (this.reconnectTimeoutId) clearTimeout(this.reconnectTimeoutId);
     if (this.playbackConnection) this.playbackConnection.close();

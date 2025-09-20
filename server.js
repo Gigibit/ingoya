@@ -21,7 +21,7 @@ import {
   getStreamIdBySessionId,
   updateDbParticipantCount,
   getRandomActiveStream,
-  getTheiaSession
+  getOrCreateTheiaSession
 } from './database.js';
 
 dotenv.config();
@@ -237,7 +237,7 @@ app.get('/random-stream', protectRoute, async (req, res) => {
     if (!randomSession) {
       console.log(`🤔 Nessun utente umano trovato. Cerco la Theia personale per ${excludeSessionId}.`);
       const userTheiaSessionId = `${excludeSessionId}_THEIA`; // Suffix corretto e standardizzato
-      randomSession = await getTheiaSession(db, userTheiaSessionId);
+      randomSession = await getOrCreateTheiaSession(db, userTheiaSessionId);
     }
 
     if (randomSession && randomSession.whepUrl) {

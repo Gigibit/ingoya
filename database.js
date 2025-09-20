@@ -63,10 +63,20 @@ export async function setupDatabase() {
  * @param {Database} db - L'istanza del database.
  * @param {string} theiaSessionId - L'ID completo della sessione Theia da cercare (es. "ABCDEF_THEIA").
  */
-export async function getTheiaSession(db, theiaSessionId) {
-    // CORREZIONE: Utilizza un parametro '?' per prevenire SQL injection.
+export async function getOrCreateTheiaSession(db, theiaSessionId) {
+    // Assicura che la sessione esista e sia attiva, creandola se necessario.
+    await db.run(
+        'INSERT OR IGNORE INTO sessions (sessionId, isActive, participantCount) VALUES (?, 1, 1)',
+        theiaSessionId
+    );
+    await db.run(
+        'UPDATE sessions SET isActive = 1 WHERE sessionId = ?',
+        theiaSessionId
+    );
+
+    // Ora recupera e restituisce i dati della sessione.
     return db.get(
-        `SELECT sessionId, whepUrl FROM sessions WHERE sessionId = ? AND isActive = 1`,
+        `SELECT sessionId, whepUrl FROM sessions WHERE sessionId = ?`,
         theiaSessionId
     );
 }
@@ -155,12 +165,7 @@ export async function updateDbParticipantCount(db, sessionId, count) {
     try {
         // Le sessioni Theia non vengono disattivate
         if (sessionId.endsWith('_THEIA')) return;
-
-        if (count > 0) {
-            await db.run('UPDATE sessions SET participantCount = ?, isActive = 1 WHERE sessionId = ?', [count, sessionId]);
-        } else {
-            await db.run('UPDATE sessions SET participantCount = 0, isActive = 0 WHERE sessionId = ?', [sessionId]);
-        }
+        await db.run('UPDATE sessions SET participantCount = 0, isActive = 0 WHERE sessionId = ? OR sessionId = ?', [sessionId, sessionId + '_THEIA_SESSION']);
     } catch (err) {
         console.error("Errore DB [updateDbParticipantCount]:", err.message);
     }

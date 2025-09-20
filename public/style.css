@@ -63,15 +63,18 @@ video::-webkit-media-controls { display: none; }
     object-fit: fill;
 }
 #interaction-buttons{
-    top: 0;
-    left: 0;
-    right: 0;
+    top: 15px;
+    left: 15px;
     position: absolute;
-    width: 100%;
-    height: 90px;
+    width: 120px;
+    background-color: #fff;
+    border: 1px black solid;
+    border-radius: 45px;
     z-index: 99999999;
+    display: flex;
+    padding: 2px;
 }
-#fullscreen-btn {
+#interaction-buttons button {
     /* Dimensioni e aspetto */
     width: 44px;
     height: 44px;
@@ -82,17 +85,25 @@ video::-webkit-media-controls { display: none; }
     cursor: pointer;
     transition: background-color 0.2s ease;
     box-sizing: border-box; /* Assicura che il padding non aumenti la dimensione */
-    margin: 10px;
+    margin: 0 auto;
 }
-
-#fullscreen-btn:hover {
+.icon-unmuted {
+    display: none; /* L'audio parte muto, quindi questa è nascosta */
+}
+body.audio-unmuted .icon-muted {
+    display: none; /* Nascondi l'icona "muto" quando l'audio è attivo */
+}
+body.audio-unmuted .icon-unmuted {
+    display: block; /* Mostra l'icona "attivo" quando l'audio è attivo */
+}
+#interaction-buttons button:hover {
     background-color: rgba(99, 102, 241, 0.5); /* Sfondo più scuro al passaggio del mouse */
 }
 
 /* Stile per l'icona SVG dentro il bottone */
-#fullscreen-btn svg {
+#interaction-buttons button svg {
     /* Usa 'stroke' per colorare le linee dell'icona, non 'fill' */
-    stroke: white;
+    stroke: var(--accent-color);
     width: 100%; /* L'icona riempie lo spazio del bottone */
     height: 100%;
 }
@@ -485,8 +496,11 @@ body.slider-view-active.config-overlay-active #playback-video.mini-video {
 .header-title{
     text-align: center;
     color: var(--accent-color);
-    z-index: 9999999999;
     opacity: 1;
+    z-index: 9999999999;
+    position: absolute;
+    left: 0;
+    right: 0;
     font-size: 100px;
     transition: opacity 1.5s ease-out;
 }
