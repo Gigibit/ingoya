@@ -240,7 +240,7 @@ app.get('/random-stream', protectRoute, async (req, res) => {
   try {
     // 1. Cerca prima un utente umano
     let randomSession = await getRandomActiveStream(db, excludeSessionId);
-    
+
     // 2. Se non trova un umano, cerca Theia
     if (!randomSession) {
       console.log("🤔 Nessun utente umano trovato. Cerco Theia come fallback.");

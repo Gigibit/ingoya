@@ -105,6 +105,10 @@ export async function createSession(db, sessionId) {
       'INSERT OR IGNORE INTO sessions (sessionId, participantCount) VALUES (?, 0)',
       sessionId
     );
+      await db.run(
+      'UPDATE sessions SET isActive = 1 WHERE sessionId = ?',
+      sessionId
+    );
     console.log(`💾 Sessione ${sessionId} creata/verificata nel DB.`);
   } catch (err) {
     console.error("Errore DB [createSession]:", err.message);
@@ -189,7 +193,7 @@ export async function getRandomActiveStream(db, excludeSessionId) {
     return db.get(
         `SELECT sessionId, whepUrl FROM sessions WHERE whepUrl IS NOT NULL AND isActive = 1 AND sessionId != ? ORDER BY RANDOM() LIMIT 1`,
         excludeSessionId
-    );  
+    );
 }
 
 export async function getStreamIdBySessionId(db, sessionId) {

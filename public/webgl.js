@@ -1232,8 +1232,8 @@ function resizeCanvas(bindedElement) {
     if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
         return false;
     }
-    let targetWidth = bindedElement ? bindedElement.offsetWidth : window.innerWidth
-    let targetHeight = bindedElement ? bindedElement.offsetHeight : window.innerHeight
+    let targetWidth = bindedElement ? bindedElement.offsetWidth : window.innerWidth / 10
+    let targetHeight = bindedElement ? bindedElement.offsetHeight : window.innerHeight / 10
 
     // --- ✅ SOLUZIONE: Usa le dimensioni della finestra, non del canvas ---
     // Questo rompe il ciclo di feedback che causa l'ingrandimento infinito.

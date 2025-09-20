@@ -166,7 +166,6 @@ export class Theia {
     this.outChannel = this.conversationConnection.createDataChannel("oai-events");
     this.outChannel.onmessage = async ev => {
       const msg = JSON.parse(ev.data);
-      console.log(msg)
       if (msg.type == 'response.audio_transcript.done') {
         let transcript = msg.transcript;
         const response = await fetch('/theia-update-stream-params', {
@@ -194,6 +193,8 @@ export class Theia {
     document.addEventListener('userInteraction', event =>{
         switch(event.detail.type){
           case 'onExperienceStarted':
+              if(localStorage.getItem('platformExplained')) return
+              localStorage.setItem('platformExplained', true)
               this.outChannel.send(JSON.stringify({
               type: "response.create",
               response: {
@@ -205,8 +206,8 @@ export class Theia {
             break;
           case 'onToggleConfigOverlay' :
             const instructions =  event.detail.isActive ? 
-                                  "Ho cliccato il bottone per configurare il mio volto sulla base di un prompt, fammi compagnia, dimmi che posso sembrare chiunque o qualunque cosa in modo creativo." :
-                                  "Ho ripreso l'esplorazione. caricami andiamo a cercare altri utenti che possono essere qualsaisi essere o cosa vogliono! si parte!";
+                                  "Parla in italiano. Ho cliccato il bottone per configurare il mio volto sulla base di un prompt, dimmi che sono una meraviglia." :
+                                  "Parla in italiano. Augurami in maniera sintetica 'buona esplorazione', si parte!";
               
             this.outChannel.send(JSON.stringify({
               type: "response.create",
@@ -220,6 +221,17 @@ export class Theia {
         }
     })
   }
+
+  mute(){
+    this.conversationConnection.close()
+    if (this.remoteAudioElement) this.remoteAudioElement.remove();
+    if (this.placeholderAudioElement) {
+      this.placeholderAudioElement.pause();
+      this.placeholderAudioElement.remove();
+    }
+  }
+  
+  unmute = this.callTheia
 
   stopConversation() {
     if (this.conversationConnection) this.conversationConnection.close();
