@@ -11,9 +11,7 @@ import createAuthRouter from './auth.router.js';
 import cookieParser from 'cookie-parser';
 import { protectRoute } from './auth.middleware.js';
 
-
-
-// Importa sia il setup che le nuove funzioni di query
+// Rimuoviamo seedAiUser, non è più necessario con le Theia personali
 import {
   setupDatabase,
   createSession,
@@ -23,7 +21,6 @@ import {
   getStreamIdBySessionId,
   updateDbParticipantCount,
   getRandomActiveStream,
-  seedAiUser,
   getTheiaSession
 } from './database.js';
 
@@ -74,9 +71,6 @@ function getSense (){
     if( numericalSenseRappresentation < .6 ) return 'listen, ears'
     if( numericalSenseRappresentation < .8 ) return 'touches, hands'
     if( numericalSenseRappresentation <= 1 ) return 'smell, nose'
-
-
-
 }
 
 // --- ENDPOINT REST ---
@@ -114,7 +108,6 @@ app.post('/stream-session', protectRoute, async (req, res) => {
       console.error("[DEBUG] Risposta Livepeer senza whip_url:", JSON.stringify(streamData, null, 2));
       throw new Error('whip_url mancante nella risposta di Livepeer.');
     }
-    console.log(res)
 
     await saveWhipDetails(db, sessionId, streamId, whipUrl);
     res.json({ streamId, sessionId, whipUrl });
@@ -137,6 +130,7 @@ app.post('/update-whep-url', protectRoute, async (req, res) => {
     res.status(500).json({ error: "Errore durante il salvataggio dell'URL WHEP." });
   }
 });
+
 app.post('/update-stream-params', protectRoute, async (req, res) => {
     const { sessionId, prompt } = req.body;
     if (!sessionId || !prompt) {
@@ -174,6 +168,7 @@ app.post('/update-stream-params', protectRoute, async (req, res) => {
         res.status(500).json({ error: "Errore durante l'aggiornamento dei parametri dello stream." });
     }
 });
+
 app.post('/theia-update-stream-params', protectRoute, async (req, res) => {
     const { sessionId, prompt } = req.body;
     if (!sessionId || !prompt) {
@@ -197,7 +192,6 @@ app.post('/theia-update-stream-params', protectRoute, async (req, res) => {
     });
 
     const data = await r.json();
-    console.log(data.choices?.[0]?.message)
     let advancedPrompt = data.choices?.[0]?.message?.content + `, ${getSense()}`
     console.log(`🤔 Nuovo prompt ${advancedPrompt}`)
     try {
@@ -205,8 +199,6 @@ app.post('/theia-update-stream-params', protectRoute, async (req, res) => {
         if (!streamId) {
             return res.status(404).json({ error: "Nessun streamId attivo trovato per questa sessione." });
         }
-
-        console.log(`[DEBUG] Aggiornamento stream ${streamId} per sessione ${sessionId}`);
 
         const paramsPayload = { "params": { "prompt": advancedPrompt  } };
         const response = await fetch(`${DAYDREAM_API_BASE_URL}/v1/streams/${streamId}`, {
@@ -240,16 +232,18 @@ app.get('/random-stream', protectRoute, async (req, res) => {
   try {
     // 1. Cerca prima un utente umano
     let randomSession = await getRandomActiveStream(db, excludeSessionId);
-
-    // 2. Se non trova un umano, cerca Theia
+    
+    // 2. Se non trova un umano, cerca la Theia PERSONALE dell'utente richiedente
     if (!randomSession) {
-      console.log("🤔 Nessun utente umano trovato. Cerco Theia come fallback.");
-      randomSession = await getTheiaSession(db);
+      console.log(`🤔 Nessun utente umano trovato. Cerco la Theia personale per ${excludeSessionId}.`);
+      const userTheiaSessionId = `${excludeSessionId}_THEIA`; // Suffix corretto e standardizzato
+      randomSession = await getTheiaSession(db, userTheiaSessionId);
     }
-    if (randomSession && (randomSession.whepUrl || randomSession.sessionId === 'THEIA_SESSION')) {
+
+    if (randomSession && randomSession.whepUrl) {
       res.json({ sessionId: randomSession.sessionId, whepUrl: randomSession.whepUrl });
     } else {
-      res.status(404).json({ message: "Nessun altro stream attivo trovato, inclusa Theia." });
+      res.status(404).json({ message: "Nessun altro stream attivo trovato, inclusa la Theia personale." });
     }
   } catch (err) {
     console.error("Errore durante la ricerca di uno stream casuale:", err.message);
@@ -298,8 +292,9 @@ io.on('connection', (socket) => {
     socket.rooms.forEach(sessionId => {
       if (sessionId !== socket.id) {
         const room = io.sockets.adapter.rooms.get(sessionId);
-        const currentCount = room ? room.size : 1;
-        updateDbParticipantCount(db, sessionId, currentCount - 1);
+        const newParticipantCount = room ? room.size - 1 : 0;
+        console.log(`🔌 Utente in disconnessione da ${sessionId}. Nuovo conteggio: ${newParticipantCount}`);
+        updateDbParticipantCount(db, sessionId, newParticipantCount);
       }
     });
   });
@@ -339,11 +334,9 @@ app.post("/interpret", protectRoute, async (req, res) => {
 async function startServer() {
   db = await setupDatabase();
   
-  // --- MONTAGGIO DEI ROUTER ---
-  // Ora passiamo 'db' e altre dipendenze direttamente ai router
   const authRouter = createAuthRouter(db);
-  await seedAiUser(db);
 
+  // Rimuoviamo la chiamata a seedAiUser, non più necessaria.
   app.use('/auth', authRouter);
   app.use(lunaRouter);
 

@@ -12,6 +12,7 @@ class AppController {
         this.isTransitioning = false;
         this.theiaInstance = null;
         this.theiaAudioFader = null; // Per gestire l'intervallo del fade
+        this.fullscreenBtn = document.getElementById('fullscreen-btn');
 
         this.livepeerConnection = null;
         this.p2pAudioConnection = null;
@@ -137,8 +138,37 @@ class AppController {
             }
             this.handleUpdateParams(e.detail.interpolation);
         });
+        this.fullscreenBtn.addEventListener('click', () => this._toggleFullScreen());
     }
 
+    _toggleFullScreen() {
+        if (!document.fullscreenElement &&    // Standard
+            !document.mozFullScreenElement && // Firefox
+            !document.webkitFullscreenElement && // Chrome, Safari and Opera
+            !document.msFullscreenElement) {  // IE/Edge
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen();
+            } else if (document.documentElement.mozRequestFullScreen) { /* Firefox */
+                document.documentElement.mozRequestFullScreen();
+            } else if (document.documentElement.webkitRequestFullscreen) { /* Chrome, Safari & Opera */
+                document.documentElement.webkitRequestFullscreen();
+            } else if (document.documentElement.msRequestFullscreen) { /* IE/Edge */
+                document.documentElement.msRequestFullscreen();
+            }
+            document.body.classList.add('fullscreen-active');
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.mozCancelFullScreen) { /* Firefox */
+                document.mozCancelFullScreen();
+            } else if (document.webkitExitFullscreen) { /* Chrome, Safari and Opera */
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) { /* IE/Edge */
+                document.msExitFullscreen();
+            }
+            document.body.classList.remove('fullscreen-active');
+        }
+    }
     _setupSocket() {
         this.socket = io();
         this.socket.on('connect', () => {
@@ -193,7 +223,7 @@ class AppController {
     _preloadTheia() {
         if (this.theiaInstance || !this.localAudioSubStream) return;
         console.log("🤖 Pre-caricamento di Theia in background...");
-        this.theiaInstance = new Theia();
+        this.theiaInstance = new Theia(this.sessionId);
         const theiaVideoEl = this.theiaSlide.querySelector('.playback-video');
         this.theiaInstance.startConversation(this.localAudioSubStream, theiaVideoEl);
 
@@ -293,7 +323,7 @@ class AppController {
 
             const data = await response.json();
 
-            if (data.sessionId && data.sessionId !== 'THEIA_SESSION') {
+            if (data.sessionId && data.sessionId !== this.sessionId + '_THEIA_SESSION') {
                 console.log(`👤 Trovato utente umano: ${data.sessionId}`);
                 const userSlide = this._createSlideForStream(data.sessionId, data.whepUrl);
                 this.transitionToSlide(userSlide);
@@ -331,7 +361,7 @@ class AppController {
         }
         
         // --- MODIFICA CHIAVE: Gestione fade audio ---
-        if (nextSlide.dataset.sessionId === 'THEIA_SESSION') {
+        if (nextSlide.dataset.sessionId === this.sessionId + '_THEIA_SESSION') {
             this._fadeAudio(false); // Fade IN
         } else if (currentSlide && currentSlide.dataset.sessionId === 'THEIA_SESSION') {
             this._fadeAudio(true); // Fade OUT
@@ -358,7 +388,7 @@ class AppController {
             setTimeout(() => {
                 this.isTransitioning = false;
                 const streamerSessionId = nextSlide.dataset.sessionId;
-                if (streamerSessionId !== 'THEIA_SESSION' && this.localAudioSubStream) {
+                if (streamerSessionId !== this.sessionId + '_THEIA_SESSION' && this.localAudioSubStream) {
                     this.socket.emit('request-audio-call', { streamerSessionId });
                 }
             }, 500);

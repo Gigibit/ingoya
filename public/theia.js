@@ -2,7 +2,8 @@
  * Gestisce la conversazione con un'AI audio e lo streaming del suo output video.
  */
 export class Theia {
-  constructor() {
+  constructor(sessionId) {
+    this.sessionId = sessionId
     this.conversationConnection = new RTCPeerConnection();
     this.livepeerConnection = null;
     this.playbackConnection = null;
@@ -15,6 +16,8 @@ export class Theia {
     this.theiaVideoSender = null;
     this.theiaAudioSender = null;
     this.placeholderAudioElement = null;
+    document.getElementById('theia-slide').setAttribute('data-session-id', this.sessionId + '_THEIA_SESSION')
+
   }
 
   /**
@@ -33,7 +36,7 @@ export class Theia {
       const streamSessionRes = await fetch('/stream-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: 'THEIA_SESSION' })
+        body: JSON.stringify({ sessionId: this.sessionId + '_THEIA_SESSION' })
       });
       if (!streamSessionRes.ok) throw new Error("Errore nel recuperare il whipUrl per Theia");
       const sessionData = await streamSessionRes.json();
@@ -136,7 +139,7 @@ export class Theia {
 
   _handlePlayback(targetVideoElement, whepUrl) {
     if (!targetVideoElement || !whepUrl) return console.error("Theia Playback: argomenti invalidi.");
-    this.callTheia();
+    //this.callTheia();
 
     if (this.reconnectTimeoutId) clearTimeout(this.reconnectTimeoutId);
     if (this.playbackConnection) this.playbackConnection.close();
@@ -171,7 +174,7 @@ export class Theia {
         const response = await fetch('/theia-update-stream-params', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: 'THEIA_SESSION', prompt: transcript })
+          body: JSON.stringify({ sessionId: this.sessionId + '_THEIA_SESSION', prompt: transcript })
         });
         if (!response.ok) console.error(`Errore aggiornamento parametri Theia: ${response.statusText}`);
       }

@@ -59,57 +59,37 @@ export async function setupDatabase() {
 }
 
 /**
- * Crea l'utente e la sessione per l'AI se non esistono.
- * Questo assicura che Theia sia sempre "trovabile" dagli altri utenti.
+ * Recupera la sessione Theia personale di un utente.
  * @param {Database} db - L'istanza del database.
+ * @param {string} theiaSessionId - L'ID completo della sessione Theia da cercare (es. "ABCDEF_THEIA").
  */
-export async function seedAiUser(db) {
-    const AI_USERNAME = 'Theia';
-    const AI_SESSION_ID = 'THEIA_SESSION';
-
-    try {
-        // Crea l'utente AI se non esiste
-        await db.run(
-            `INSERT OR IGNORE INTO users (username) VALUES (?)`,
-            [AI_USERNAME]
-        );
-
-        // Crea la sessione per l'AI se non esiste
-        // Nota: non ha bisogno di URL, solo di essere "attiva"
-        await db.run(
-            `INSERT OR IGNORE INTO sessions (sessionId, isActive, participantCount) VALUES (?, 1, 1)`,
-            [AI_SESSION_ID]
-        );
-        console.log(`🤖 Utente e sessione per l'AI "${AI_USERNAME}" verificati.`);
-    } catch (err) {
-        console.error("❌ Errore durante il seeding dell'utente AI:", err.message);
-    }
+export async function getTheiaSession(db, theiaSessionId) {
+    // CORREZIONE: Utilizza un parametro '?' per prevenire SQL injection.
+    return db.get(
+        `SELECT sessionId, whepUrl FROM sessions WHERE sessionId = ? AND isActive = 1`,
+        theiaSessionId
+    );
 }
-
-export async function getTheiaSession(db) {
-    return db.get(`SELECT sessionId, whepUrl FROM sessions WHERE sessionId = 'THEIA_SESSION' AND isActive = 1`);
-}
-
-
-
-// --- NUOVE FUNZIONI ESPORTATE PER LA GESTIONE DELLE SESSIONI ---
 
 /**
- * Crea una nuova sessione nel DB se non esiste.
+ * Crea una nuova sessione nel DB se non esiste, o la riattiva se era inattiva.
  * @param {Database} db - L'istanza del database.
  * @param {string} sessionId - L'ID della sessione.
  */
 export async function createSession(db, sessionId) {
   try {
+    // 1. Inserisce la sessione se non esiste, con isActive=1 di default.
     await db.run(
-      'INSERT OR IGNORE INTO sessions (sessionId, participantCount) VALUES (?, 0)',
+      'INSERT OR IGNORE INTO sessions (sessionId, participantCount, isActive) VALUES (?, 0, 1)',
       sessionId
     );
-      await db.run(
+
+    // 2. Forza lo stato ad "attivo" per riattivare una sessione che era inattiva.
+    await db.run(
       'UPDATE sessions SET isActive = 1 WHERE sessionId = ?',
       sessionId
     );
-    console.log(`💾 Sessione ${sessionId} creata/verificata nel DB.`);
+    console.log(`💾 Sessione ${sessionId} creata o riattivata nel DB.`);
   } catch (err) {
     console.error("Errore DB [createSession]:", err.message);
   }
@@ -173,6 +153,9 @@ export async function saveWhepUrlDetails(db, sessionId, whepUrl) {
  */
 export async function updateDbParticipantCount(db, sessionId, count) {
     try {
+        // Le sessioni Theia non vengono disattivate
+        if (sessionId.endsWith('_THEIA')) return;
+
         if (count > 0) {
             await db.run('UPDATE sessions SET participantCount = ?, isActive = 1 WHERE sessionId = ?', [count, sessionId]);
         } else {
@@ -184,14 +167,19 @@ export async function updateDbParticipantCount(db, sessionId, count) {
 }
 
 /**
- * Recupera uno stream casuale e attivo, escludendo una sessione specifica.
+ * Recupera uno stream di un utente umano casuale e attivo, escludendo una sessione specifica.
  * @param {Database} db - L'istanza del database.
  * @param {string} excludeSessionId - L'ID della sessione da escludere.
  * @returns {Promise<object|null>} La sessione trovata o null.
  */
 export async function getRandomActiveStream(db, excludeSessionId) {
     return db.get(
-        `SELECT sessionId, whepUrl FROM sessions WHERE whepUrl IS NOT NULL AND isActive = 1 AND sessionId != ? ORDER BY RANDOM() LIMIT 1`,
+        `SELECT sessionId, whepUrl FROM sessions 
+         WHERE whepUrl IS NOT NULL 
+         AND isActive = 1 
+         AND sessionId != ? 
+         AND sessionId NOT LIKE '%\\_THEIA'
+         ORDER BY RANDOM() LIMIT 1`,
         excludeSessionId
     );
 }
@@ -205,3 +193,4 @@ export async function getStreamIdBySessionId(db, sessionId) {
     throw err;
   }
 }
+
