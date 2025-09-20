@@ -29,9 +29,9 @@ class AppController {
         this.muteBtn = document.getElementById('mute-btn');
         this.fullscreenBtn = document.getElementById('fullscreen-btn');
         this.theiaSlide = document.getElementById('theia-slide');
+        this.title = document.getElementById('main-title');
 
         this._init();
-        document.getElementById('main-title').style.opacity = '0';
     }
 
     async _init() {
@@ -40,6 +40,7 @@ class AppController {
             console.log("Verifica fallita. Inizializzazione dell'app interrotta.");
             return;
         }
+
         console.log("✅ Autenticazione riuscita. Avvio dell'applicazione...");
         this._setupSocket();
         this._setupEventListeners();
@@ -68,7 +69,7 @@ class AppController {
                     audioEl.volume = newVolume;
                 }
             }, intervalTime);
-        } else { 
+        } else { // Fade In
             let startVolume = audioEl.volume;
             this.theiaAudioFader = setInterval(() => {
                 currentStep++;
@@ -128,6 +129,9 @@ class AppController {
                 e.preventDefault(); this.handleUpdateParams();
             }
         });
+        this.promptInput.addEventListener('input', () => {
+            this.updateBtn.classList.toggle('has-text', this.promptInput.value.trim()!== '');
+        });
         document.addEventListener('usermessageinterpolation', (e) => {
             if (this.socket) {
                 this.socket.emit('share-user-message', { sessionId: this.sessionId, text: e.detail.text, interpolation: e.detail.interpolation });
@@ -142,7 +146,7 @@ class AppController {
         }
         document.addEventListener('fullscreenchange', this._handleFullscreenChange.bind(this));
     }
-    
+
     _toggleMute() {
         const isCurrentlyUnmuted = document.body.classList.contains('audio-unmuted');
         const newMutedState = isCurrentlyUnmuted;
@@ -164,7 +168,7 @@ class AppController {
             document.body.classList.remove('fullscreen-active');
         }
     }
-    
+
     _toggleFullScreen() {
         if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen().catch(err => {
@@ -176,7 +180,6 @@ class AppController {
             }
         }
     }
-
     _setupSocket() {
         this.socket = io();
         this.socket.on('connect', () => {
@@ -226,6 +229,7 @@ class AppController {
         if (this.localStream) {
             await this.getOrCreateStreamSession(this.localStream);
         }
+        this.title.style.opacity = '0';
     }
 
     _preloadTheia() {
@@ -279,15 +283,6 @@ class AppController {
         this.originalPlaybackVideo.classList.add('mini-video');
         document.body.appendChild(this.originalPlaybackVideo);
         this.controlsSection.style.opacity = '0';
-
-        this.findNextExperience();
-
-        let touchStartY = 0;
-        window.addEventListener('wheel', (event) => { if (event.deltaY > 0) this.findNextExperience(); }, { passive: true });
-        window.addEventListener('touchstart', (e) => { touchStartY = e.changedTouches[0].screenY; }, { passive: true });
-        window.addEventListener('touchend', (e) => {
-            if (touchStartY - e.changedTouches[0].screenY > 50) this.findNextExperience();
-        }, { passive: true });
     }
 
     toggleConfigOverlay() {
@@ -300,14 +295,28 @@ class AppController {
     enableExploreMode() {
         if (this.canExplore) return;
         this.canExplore = true;
-        const handleInitialAction = () => {
-            if (this.isSliderViewActive) return;
-            window.removeEventListener('wheel', handleInitialAction);
-            window.removeEventListener('touchend', handleInitialAction);
-            this.switchToSliderView();
+        
+        // Unica funzione gestore per tutti gli eventi di esplorazione
+        const exploreHandler = () => {
+            // La prima volta, cambia la vista e poi cerca un utente
+            if (!this.isSliderViewActive) {
+                this.switchToSliderView();
+            }
+            // Su tutte le chiamate (inclusa la prima), cerca il prossimo utente
+            this.findNextExperience();
         };
-        window.addEventListener('wheel', handleInitialAction, { once: true, passive: true });
-        window.addEventListener('touchend', handleInitialAction, { once: true, passive: true });
+
+        // Aggiungi i listener una sola volta
+        let touchStartY = 0;
+        window.addEventListener('wheel', (event) => {
+            if (event.deltaY > 0) exploreHandler();
+        }, { passive: true });
+        window.addEventListener('touchstart', (e) => {
+            touchStartY = e.changedTouches[0].screenY;
+        }, { passive: true });
+        window.addEventListener('touchend', (e) => {
+            if (touchStartY - e.changedTouches[0].screenY > 50) exploreHandler();
+        }, { passive: true });
     }
 
     async findNextExperience() {
@@ -324,10 +333,8 @@ class AppController {
             const data = await response.json();
 
             if (data.sessionId.endsWith('_THEIA')) {
-                console.log("🤔 Nessun utente umano disponibile, mostro Theia.");
                 this.transitionToSlide(this.theiaSlide);
             } else {
-                console.log(`👤 Trovato utente umano: ${data.sessionId}`);
                 const userSlide = this._createSlideForStream(data.sessionId, data.whepUrl);
                 this.transitionToSlide(userSlide);
             }
@@ -349,17 +356,14 @@ class AppController {
         return slide;
     }
 
-
     transitionToSlide(nextSlide) {
         const currentSlide = this.streamContainer.querySelector('.is-visible');
 
         if (currentSlide === nextSlide) {
             this.loader.style.display = 'none';
-            // Debounce: previene chiamate multiple se si è già sulla slide di fallback,
-            // allineando il timeout a quello dell'animazione per coerenza.
             setTimeout(() => {
                 this.isTransitioning = false;
-            }, 800);
+            }, 2000);
             return;
         }
 
@@ -391,14 +395,13 @@ class AppController {
                 }, { once: true });
             }
             
-            // Aspetta la fine della transizione CSS (0.8s) per resettare il flag.
             setTimeout(() => {
                 this.isTransitioning = false;
                 const streamerSessionId = nextSlide.dataset.sessionId;
                 if (!streamerSessionId.endsWith('_THEIA') && this.localAudioSubStream) {
                     this.socket.emit('request-audio-call', { streamerSessionId });
                 }
-            }, 800);
+            }, 2000);
         });
     }
 

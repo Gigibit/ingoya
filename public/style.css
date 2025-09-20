@@ -61,6 +61,8 @@ video::-webkit-media-controls { display: none; }
 }
 .playback-video{
     object-fit: fill;
+    border-radius: 5px;
+    background: transparent;
 }
 #interaction-buttons{
     top: 15px;
@@ -136,7 +138,7 @@ body.fullscreen-active .icon-exit-fullscreen {
 #local-preview-overlay {
     z-index: 2;
     opacity: 1;
-    transition: opacity 1.5s ease-out;
+    transition: opacity 1.5s ease-in-out;
     transform: translateZ(0);
 }
 
@@ -362,8 +364,12 @@ body.slider-view-active {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    right: 0;
+    bottom: 0;
+    margin: 0 auto;
+    width: 98vw;
+    height: 98vh;
+    border: 8px rgba(99, 102, 241, 0.3) solid;
 }
 
 
@@ -384,6 +390,7 @@ body.slider-view-active {
     transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
     pointer-events: none;
     overflow: hidden;
+    background-color: rgba(99, 102, 241, 0.3) 
 }
 
 .slide.is-visible {

@@ -208,9 +208,9 @@ export class Theia {
             }));
             break;
           case 'onToggleConfigOverlay' :
-            const instructions =  event.detail.isActive ? 
+            const instructions =  !event.detail.isActive ? 
                                   "Parla in italiano. Ho cliccato il bottone per configurare il mio volto sulla base di un prompt, dimmi che sono una meraviglia." :
-                                  "Parla in italiano. Augurami in maniera sintetica 'buona esplorazione', si parte!";
+                                  "Parla in italiano. Augurami in maniera sintetica 'buona esplorazione'";
               
             this.outChannel.send(JSON.stringify({
               type: "response.create",

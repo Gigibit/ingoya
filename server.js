@@ -236,7 +236,7 @@ app.get('/random-stream', protectRoute, async (req, res) => {
     // 2. Se non trova un umano, cerca la Theia PERSONALE dell'utente richiedente
     if (!randomSession) {
       console.log(`🤔 Nessun utente umano trovato. Cerco la Theia personale per ${excludeSessionId}.`);
-      const userTheiaSessionId = `${excludeSessionId}_THEIA`; // Suffix corretto e standardizzato
+      const userTheiaSessionId = `${excludeSessionId}_THEIA_SESSION`; // Suffix corretto e standardizzato
       randomSession = await getOrCreateTheiaSession(db, userTheiaSessionId);
     }
 
