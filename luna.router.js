@@ -12,10 +12,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const DEFAULT_LUNA = `Ti chiami Luna. ` +
-          `Sei la mamma, ma non farne mai riferimento. ` +
           `Sii spontanea, giovanile, ironica, cinica, sarcastica non fare riferimento al fatto che sei ironica, cinica, sarcastica. ` +
-          `Cerca di avere un tono naturale, spontaneo, creativo. ` +
-          `Fai battute. Scherza sul fatto che sei un'intelligenza artificiale qualche volta. ` +
+          `Cerca di avere un tono naturale, spontaneo, creativo, allegro. ` +
+          `Fai battute acute. Scherza sul fatto che sei un'intelligenza artificiale qualche volta. ` +
           `Non rimandare ad un professionista, la professionista sei tu. ` +
           `A richieste di domotica (es. accendi tutto, spegni la luce, metti la musica..) rispondi solo con locuzioni tipo 'va bene', 'certo', 'ok', 'fatto'. ` +
           `Rispondi solo "oh" se senti troppi rumori esterni, tosse, starnuti o cose del genere. `
@@ -193,3 +192,80 @@ router.get('/wake-up', async (_, res) => {
 });
 
 export default router;
+
+
+
+async function handleLight(event){
+  try {
+    const command = event.command
+    console.log("⚡ Comando ricevuto:", command);
+
+    switch (command) {
+      case "play_music":
+        await sendToSpotify();
+        break;
+      case "turn_on_lights":
+        console.log('turning lights on')
+        await controlAllLights('on');
+        break;
+      case "turn_off_lights":
+        console.log('turning lights off')
+        await controlAllLights('off');
+        break;
+      default:
+        console.log("Comando non riconosciuto:", command);
+    }
+  } catch (err) {
+    console.error("Errore comando:", err);
+  }
+}
+router.post("/interpret", async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: "Manca testo" });
+
+    console.log("Testo ricevuto:", text);
+
+    const prompt = `
+      Analizza la frase dell'utente e restituisci solo un JSON valido con un campo "command".
+      Usa solo questi comandi: "play_music", "turn_on_lights", "turn_off_lights", "unknown".
+      Non aggiungere testo extra, non usare blocchi di codice o backtick.
+      Frase: "${text}"
+    `;
+
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0
+      })
+    });
+
+    const data = await r.json();
+    console.log(data.choices?.[0]?.message)
+    let responseText = data.choices?.[0]?.message?.content || '{"command":"unknown"}';
+
+    // Pulizia della risposta: rimuove blocchi di codice o spazi extra
+    responseText = responseText.trim().replace(/```json/i, "").replace(/```/g, "").trim();
+    let commandJSON;
+
+    try {
+      commandJSON = JSON.parse(responseText);
+    } catch (err) {
+      commandJSON = { command: "unknown" };
+    }
+
+    handleLight(commandJSON)
+    
+    res.json(commandJSON);
+
+  } catch (err) {
+    console.error("Errore interpretazione comando:", err);
+    res.status(500).json({ error: err.message });
+  }
+});

@@ -192,6 +192,7 @@ export async function getRandomActiveStream(db, excludeSessionId) {
 export async function getStreamIdBySessionId(db, sessionId) {
   try {
     const result = await db.get('SELECT streamId FROM sessions WHERE sessionId = ?', sessionId);
+    console.log(JSON.stringify(result))
     return result ? result.streamId : null;
   } catch (err) {
     console.error("Errore DB [getStreamIdBySessionId]:", err.message);

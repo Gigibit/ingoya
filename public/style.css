@@ -357,7 +357,6 @@ body.slider-view-active {
     display: block;
     padding: 0;
     overflow: hidden;
-    /* background-color: #000; */
 }
 
 #stream-container {
@@ -367,9 +366,11 @@ body.slider-view-active {
     right: 0;
     bottom: 0;
     margin: 0 auto;
-    width: 98vw;
-    height: 98vh;
+    width: 100%;
+    height: 100%;
+    padding: 3px;
     border: 8px rgba(99, 102, 241, 0.3) solid;
+    box-sizing: border-box;
 }
 
 
@@ -511,3 +512,4 @@ body.slider-view-active.config-overlay-active #playback-video.mini-video {
     font-size: 100px;
     transition: opacity 1.5s ease-out;
 }
+

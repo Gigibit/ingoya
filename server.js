@@ -62,7 +62,7 @@ app.use(express.static("public"));
 
 
 function getSense (){
-    return 'mouth, taste, lips, tongue'
+    return 'moon, mouth, taste, lips, tongue'
     // testing experience
     const numericalSenseRappresentation = Math.random();
 
@@ -75,7 +75,7 @@ function getSense (){
 
 // --- ENDPOINT REST ---
 
-app.post('/stream-session', protectRoute, async (req, res) => {
+app.post('/stream-session', async (req, res) => {
   let { sessionId } = req.body;
   if (!sessionId) sessionId = generateSessionId(6)
   try {
@@ -117,7 +117,7 @@ app.post('/stream-session', protectRoute, async (req, res) => {
   }
 });
 
-app.post('/update-whep-url', protectRoute, async (req, res) => {
+app.post('/update-whep-url', async (req, res) => {
   const { sessionId, whepUrl } = req.body;
   if (!sessionId || !whepUrl) {
     return res.status(400).json({ error: "sessionId e whepUrl sono obbligatori." });
@@ -131,7 +131,7 @@ app.post('/update-whep-url', protectRoute, async (req, res) => {
   }
 });
 
-app.post('/update-stream-params', protectRoute, async (req, res) => {
+app.post('/update-stream-params', async (req, res) => {
     const { sessionId, prompt } = req.body;
     if (!sessionId || !prompt) {
         return res.status(400).json({ error: "sessionId e prompt sono obbligatori." });
@@ -169,13 +169,13 @@ app.post('/update-stream-params', protectRoute, async (req, res) => {
     }
 });
 
-app.post('/theia-update-stream-params', protectRoute, async (req, res) => {
+app.post('/theia-update-stream-params', async (req, res) => {
     const { sessionId, prompt } = req.body;
     if (!sessionId || !prompt) {
         return res.status(400).json({ error: "sessionId e prompt sono obbligatori." });
     }
     const lighter = `
-      Sei il generatore di prompt di una pipeline di Stream Diffusion cerca di raccontare in un prompt come rappresentare graficamente questa frase, sii quanto più veloce e sintetica possibile, scrivi solo una frase  e in inglese: "${prompt}"
+      Sei il generatore di prompt di una pipeline di Stream Diffusion cerca di raccontare in un prompt come rappresentare graficamente questa frase, sii velocissima e sintetica, scrivi solo la frase e in inglese: "${prompt}"
     `;
 
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -199,7 +199,7 @@ app.post('/theia-update-stream-params', protectRoute, async (req, res) => {
         if (!streamId) {
             return res.status(404).json({ error: "Nessun streamId attivo trovato per questa sessione." });
         }
-
+        console.log(`${DAYDREAM_API_BASE_URL}/v1/streams/${streamId}`)
         const paramsPayload = { "params": { "prompt": advancedPrompt  } };
         const response = await fetch(`${DAYDREAM_API_BASE_URL}/v1/streams/${streamId}`, {
             method: 'PATCH',
@@ -305,7 +305,7 @@ app.get('/ingoya', protectRoute, (_, res) => res.sendFile(path.join(__dirname, '
 app.get('/draw', (_, res) => res.sendFile(path.join(__dirname, "public", "draw.html")));
 app.get('/', (_, res) => res.sendFile(path.join(__dirname, "public", "login.html")));
 
-app.post("/interpret", protectRoute, async (req, res) => {
+app.post("/_interpret", protectRoute, async (req, res) => {
   if (!OPENAI_API_KEY) return res.status(500).json({ error: "OpenAI API Key non configurata." });
   try {
     const { text } = req.body;

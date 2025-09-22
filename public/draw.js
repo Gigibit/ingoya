@@ -486,13 +486,13 @@ class AppController {
         if (!prompt) return;
         this.updateBtn.disabled = true;
         try {
+            this.promptInput.value = '';
             const response = await fetch('/update-stream-params', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sessionId: this.sessionId, prompt })
             });
             if (!response.ok) throw new Error(`Errore dal server: ${response.statusText}`);
-            this.promptInput.value = '';
             this.promptInput.dispatchEvent(new Event('input'));
         } catch (error) {
             console.error('Errore aggiornamento parametri:', error);
