@@ -10,11 +10,62 @@
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap" rel="stylesheet">
     <link href="style.css" rel="stylesheet">
+    <!-- FontAwesome per le icone dei like -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 </head>
 
 <body class="audio-unmuted">
     <h1 id="main-title" class="header-title">inGoya</h1>
 
+    <div id="top-right-buttons">
+        <!-- Contenitore per i like in alto a destra -->
+        <div id="likes-container">
+            <button id="like-button" title="Like">
+                <!-- Icona del cuore pieno -->
+                <i class="fas fa-heart filled-heart" style="display: none;"></i>
+                <!-- Icona del cuore vuoto -->
+                <i class="far fa-heart unfilled-heart"></i>
+            </button>
+            <span id="like-count">0</span>
+        </div>
+
+        <!-- Pulsante di chiamata in alto a destra -->
+        <div id="call-button-container">
+            <button id="call-button" title="Call">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="#6366F1">
+                    <path d="M164.9 24.6c-7.7-18.6-28-28.5-47.4-23.2l-88 24C1.9 39.2-3.6 59.7 3.1 79.5l25.5 76.5c11.6 34.6 15.6 72.8 15.6 109.2c0 14.2-2.3 28.3-6.6 42.1l-6.8 20.3c-2.3 6.8-2.6 14.2-1 21.3l27.1 123.1c8.4 38.3 43.1 65.5 83.2 65.5H352c66.3 0 112.5-44.1 120.4-106.1l4-32C479.5 291.6 470.9 270.8 454.4 259.9L403.4 227c-33.1-21.7-76.3-25.5-112.6-11.4l-36.9 14.8c-14.7 5.9-30.8 7.3-46.7 4.1zM352 448c-26.5 0-48-21.5-48-48s21.5-48 48-48h24c8.8 0 16 7.2 16 16v16c0 8.8-7.2 16-16 16H352c-8.8 0-16 7.2-16 16s7.2 16 16 16h24c26.5 0 48 21.5 48 48s-21.5 48-48 48H352z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+
+    <!-- Overlay per il tastierino di chiamata -->
+    <div id="dialpad-overlay" class="hidden">
+        <div id="dialpad-content">
+            <h2>Inserisci ID Sessione</h2>
+            <input type="text" id="dialpad-input" maxlength="6" pattern="[A-Z0-9]{6}" title="6 caratteri, solo lettere maiuscole e numeri" placeholder="es. Z12345">
+            <div id="keypad">
+                <button class="keypad-button" data-key="1">1</button>
+                <button class="keypad-button" data-key="2">2</button>
+                <button class="keypad-button" data-key="3">3</button>
+                <button class="keypad-button" data-key="4">4</button>
+                <button class="keypad-button" data-key="5">5</button>
+                <button class="keypad-button" data-key="6">6</button>
+                <button class="keypad-button" data-key="7">7</button>
+                <button class="keypad-button" data-key="8">8</button>
+                <button class="keypad-button" data-key="9">9</button>
+                <button class="keypad-button" data-key="Z">Z</button>
+                <button class="keypad-button" data-key="0">0</button>
+                <button id="keypad-backspace" class="keypad-button" data-key="backspace"><i class="fas fa-backspace"></i></button>
+            </div>
+            <div class="dialpad-actions">
+                <button id="dialpad-connect">Avvia</button>
+                <button id="dialpad-dismiss">Annulla</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- Contenitore principale per il video dell'utente e il loader iniziale -->
     <div id="video-container">
         <div class="video-inner">
@@ -90,13 +141,17 @@
     <script>
         window.selfMode = true;
         window.audioManaged = true;
+        const __app_id = "default-app-id";
+        const __firebase_config = JSON.stringify();
+        const __initial_auth_token = "dummy-auth-token";
     </script>
     <script src="/socket.io/socket.io.js"></script>
     <script type="text/javascript" src="dat.gui.min.js"></script>
     <script type="text/javascript" src="caos.js"></script>
     <script type="module" src="interpreter.js"></script>
-    <script type="module" src="theia.js"></script>
-    <script type="module" src="draw.js"></script>
+    <script type="module" src="Theia.js"></script>
+    <script type="module" src="SocialLayer.js"></script>
+    <script type="module" src="AppController.js"></script>
 </body>
 
 </html>

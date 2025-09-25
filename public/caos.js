@@ -1257,18 +1257,17 @@ function calcDeltaTime() {
 }
 
 
-function resizeCanvas(bindedElement) {
+function resizeCanvas() {
     // MODIFICA: Se il canvas è nascosto, interrompi la funzione.
     if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
         return false;
     }
-    let targetWidth = bindedElement ? bindedElement.offsetWidth : window.innerWidth / 10
-    let targetHeight = bindedElement ? bindedElement.offsetHeight : window.innerHeight / 10
+    const fixedWidth = 96;
+    const fixedHeight = 54;
 
-    // --- ✅ SOLUZIONE: Usa le dimensioni della finestra, non del canvas ---
-    // Questo rompe il ciclo di feedback che causa l'ingrandimento infinito.
-    let width = scaleByPixelRatio(targetWidth);
-    let height = scaleByPixelRatio(targetHeight);
+    //trying to landscape
+    let width = isMobile() ? fixedHeight :scaleByPixelRatio(fixedWidth);
+    let height = isMobile() ? fixedWidth : scaleByPixelRatio(fixedHeight);
 
     if (canvas.width != width || canvas.height != height) {
         canvas.width = width;

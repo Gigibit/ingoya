@@ -16,7 +16,7 @@ export class Theia {
     this.theiaVideoSender = null;
     this.theiaAudioSender = null;
     this.placeholderAudioElement = null;
-    document.getElementById('theia-slide').setAttribute('data-session-id', this.sessionId + '_THEIA_SESSION')
+    document.getElementById('theia-slide').setAttribute('data-session-id', this.sessionId + '_THEIA')
 
   }
 
@@ -25,7 +25,7 @@ export class Theia {
    * @param {MediaStream} inputStream - Lo stream audio del microfono dell'utente.
    * @param {HTMLElement} targetVideoElement - L'elemento <video> in cui mostrare lo stream di Theia.
    */
-  async startConversation(inputStream, targetVideoElement) {
+  async start(inputStream, targetVideoElement) {
     if (window.theiaDoesExist) return;
     window.theiaDoesExist = true;
     if (!inputStream) throw new Error("Input stream per Theia mancante.");
@@ -36,7 +36,7 @@ export class Theia {
       const streamSessionRes = await fetch('/stream-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: this.sessionId + '_THEIA_SESSION' })
+        body: JSON.stringify({ sessionId: this.sessionId + '_THEIA' })
       });
       if (!streamSessionRes.ok) throw new Error("Errore nel recuperare il whipUrl per Theia");
       const sessionData = await streamSessionRes.json();
@@ -48,7 +48,7 @@ export class Theia {
       }
 
     } catch (e) {
-      console.error("❌ Errore in Theia.startConversation:", e.message);
+      console.error("❌ Errore in Theia.start:", e.message);
     }
   }
 
@@ -139,8 +139,6 @@ export class Theia {
 
   _handlePlayback(targetVideoElement, whepUrl) {
     if (!targetVideoElement || !whepUrl) return console.error("Theia Playback: argomenti invalidi.");
-    this.callTheia();
-
     if (this.reconnectTimeoutId) clearTimeout(this.reconnectTimeoutId);
     if (this.playbackConnection) this.playbackConnection.close();
 
@@ -174,7 +172,7 @@ export class Theia {
         const response = await fetch('/theia-update-stream-params', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: this.sessionId + '_THEIA_SESSION', prompt: transcript })
+          body: JSON.stringify({ sessionId: this.sessionId + '_THEIA', prompt: transcript })
         });
         if (!response.ok) console.error(`Errore aggiornamento parametri Theia: ${response.statusText}`);
       }
@@ -203,14 +201,14 @@ export class Theia {
               response: {
                 conversation: "auto",
                 modalities: ["audio", "text"],
-                instructions: 'Dammi il benvenuto, e dimmi che questa è una magnifica piattaforma di esplorazione sociale in cui le persone sono quello che fottutamente vogliono essere, qualsiasi cosa o persona vogliano sembrare possono farlo, basta scrivere in quella input box in basso, e per iniziare ad esplorare il mondo, o fermarsi a fare due chiacchiere con te se non è online nessuno, basta scrollare questa pagina di configurazione.'
+                instructions: 'Dammi il benvenuto, e sussurrami (senza fare riferimenti al sussurro) sottovoce che questa è una magnifica piattaforma di esplorazione sociale in cui le persone sono quello che fottutamente vogliono essere, qualsiasi cosa o persona vogliano sembrare possono farlo, basta scrivere in quella input box in basso, e per iniziare ad esplorare il mondo, o fermarsi a fare due chiacchiere con te se non è online nessuno, basta scrollare questa pagina di configurazione.'
               }
             }));
             break;
           case 'onToggleConfigOverlay' :
             const instructions =  !event.detail.isActive ? 
-                                  "Parla in italiano. Ho cliccato il bottone per configurare il mio volto sulla base di un prompt, dimmi che sono una meraviglia." :
-                                  "Parla in italiano. Augurami in maniera sintetica 'buona esplorazione'";
+                                  "Parla in italiano. Ho cliccato il bottone per configurare il mio volto sulla base di un prompt, sussurrami (senza fare riferimenti al sussurro) che sono una meraviglia." :
+                                  "Parla in italiano. sussurrami (senza fare riferimenti al sussurro) in maniera sintetica 'buona esplorazione'";
               
             this.outChannel.send(JSON.stringify({
               type: "response.create",

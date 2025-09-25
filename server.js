@@ -16,8 +16,10 @@ import {
   setupDatabase,
   createSession,
   getSessionForWhip,
+  getSessionForWhep,
   saveWhipDetails,
   saveWhepUrlDetails,
+  findOrCreateRequest,
   getStreamIdBySessionId,
   updateDbParticipantCount,
   getRandomActiveStream,
@@ -49,7 +51,7 @@ const io = new Server(httpServer, {
   }
 });
 function generateSessionId(length = 6) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const chars = 'Z0123456789'; //'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let result = '';
   for (let i = 0; i < length; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -62,7 +64,7 @@ app.use(express.static("public"));
 
 
 function getSense (){
-    return 'moon, mouth, taste, lips, tongue'
+    return 'moon, lips, tongue'
     // testing experience
     const numericalSenseRappresentation = Math.random();
 
@@ -83,7 +85,7 @@ app.post('/stream-session', async (req, res) => {
     const existingSession = await getSessionForWhip(db, sessionId);
 
     if (existingSession) {
-      console.log(`✅ Trovata sessione WHIP esistente per ${sessionId}.`);
+      console.log(`✅ Trovata sessione WHIP esistente per ${JSON.stringify(existingSession)}.`);
       return res.json(existingSession);
     }
 
@@ -116,6 +118,35 @@ app.post('/stream-session', async (req, res) => {
     res.status(500).json({ error: "Errore durante la creazione dello stream." });
   }
 });
+app.get('/stream-session', async (req, res) => {
+  const { sessionId } = req.query;
+
+  if (!sessionId) {
+    return res.status(400).json({ error: "Il parametro 'sessionId' è obbligatorio." });
+  }
+
+  try {
+    console.log(`🔎 Ricerca sessione WHEP per ${sessionId}...`);
+    // Questa funzione deve cercare nel DB i dettagli salvati, incluso il 'whepUrl'
+    const session = await getSessionForWhep(db, sessionId); 
+
+    if (!session || !session.whepUrl) {
+      console.log(`🚫 Sessione non trovata per ${sessionId}.`);
+      return res.status(404).json({ error: "Nessuna sessione di streaming attiva trovata con questo ID." });
+    }
+
+    console.log(`✅ Trovata sessione WHEP per ${sessionId}.`);
+    // Restituisce i dati necessari al client per la riproduzione
+    res.json({
+      sessionId,
+      whepUrl: session.whepUrl,
+    });
+
+  } catch (error) {
+    console.error(`❌ Errore API /stream-session GET:`, error);
+    res.status(500).json({ error: "Errore durante il recupero dello stream." });
+  }
+});
 
 app.post('/update-whep-url', async (req, res) => {
   const { sessionId, whepUrl } = req.body;
@@ -145,7 +176,7 @@ app.post('/update-stream-params', async (req, res) => {
 
         console.log(`[DEBUG] Aggiornamento stream ${streamId} per sessione ${sessionId}`);
 
-        const paramsPayload = { "params": { "prompt": prompt + '. REAL, NOT drawn, NOT blurry, NOT low quality, NOT flat, NOT 2d"' } };
+        const paramsPayload = { "params": { "prompt": 'Mouth. Real Representation. ' + prompt + '. REAL, NOT drawn, NOT blurry, NOT low quality, NOT flat, NOT 2d"' } };
         const response = await fetch(`${DAYDREAM_API_BASE_URL}/v1/streams/${streamId}`, {
             method: 'PATCH',
             headers: {
@@ -223,6 +254,36 @@ app.post('/theia-update-stream-params', async (req, res) => {
         res.status(500).json({ error: "Errore durante l'aggiornamento dei parametri dello stream." });
     }
 });
+app.use(async (req, _, next) => {
+  // Assumendo che l'istanza del DB sia disponibile tramite app.get('db')
+  const db = req.app.get('db'); 
+
+  try {
+    // Considera proxy se presente
+    const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.ip;
+
+    // La nuova funzione gestisce sia la creazione che l'aggiornamento
+    const record = await findOrCreateRequest(db, ip);
+
+    console.log(`Richiesta da IP: ${record.ip}, Conteggio: ${record.count}`);
+  } catch (err) {
+    console.error("Errore conteggio IP:", err);
+  }
+
+  next();
+});
+
+app.get('/stats', async (req, res) => {
+  const db = req.app.get('db');
+  
+  try {
+    const allRequests = await db.all('SELECT * FROM requests ORDER BY lastRequestAt DESC');
+    res.json(allRequests);
+  } catch (err) {
+    console.error("Errore nel recuperare le statistiche:", err);
+    res.status(500).send("Impossibile recuperare le statistiche");
+  }
+});
 
 app.get('/random-stream', protectRoute, async (req, res) => {
   const { excludeSessionId } = req.query;
@@ -236,10 +297,10 @@ app.get('/random-stream', protectRoute, async (req, res) => {
     // 2. Se non trova un umano, cerca la Theia PERSONALE dell'utente richiedente
     if (!randomSession) {
       console.log(`🤔 Nessun utente umano trovato. Cerco la Theia personale per ${excludeSessionId}.`);
-      const userTheiaSessionId = `${excludeSessionId}_THEIA_SESSION`; // Suffix corretto e standardizzato
+      const userTheiaSessionId = `${excludeSessionId}_THEIA`; // Suffix corretto e standardizzato
       randomSession = await getOrCreateTheiaSession(db, userTheiaSessionId);
+      console.log(`random session not found, calling Theia module ${JSON.stringify(randomSession)}`)
     }
-
     if (randomSession && randomSession.whepUrl) {
       res.json({ sessionId: randomSession.sessionId, whepUrl: randomSession.whepUrl });
     } else {
@@ -333,7 +394,7 @@ app.post("/_interpret", protectRoute, async (req, res) => {
 // --- FUNZIONE DI AVVIO SERVER ---
 async function startServer() {
   db = await setupDatabase();
-  
+  app.set('db', db)
   const authRouter = createAuthRouter(db);
 
   // Rimuoviamo la chiamata a seedAiUser, non più necessaria.

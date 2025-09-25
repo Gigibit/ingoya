@@ -1,7 +1,6 @@
 // auth.js
 
 import express from 'express';
-import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server';
 import jwt from 'jsonwebtoken';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -18,6 +17,12 @@ const RP_ID = 'localhost';
 const ORIGIN = `http://${RP_ID}:3000`;
 const JWT_SECRET = process.env.INGOYA_SECRET_KEY;
 const SALT_ROUNDS = 10;
+const USERS_WHITELIST = [
+    'saratesttesttest',
+    'paraponzipo',
+    'giuseppeverdi',
+    'richardwagner'
+]
 
 export default function(db) {
     const router = express.Router();
@@ -46,7 +51,10 @@ export default function(db) {
 
         try {
             // Usiamo la frase stessa come username. In un'app reale potresti voler normalizzarla (es. lowercase).
-            const username = idPhrase;
+            const username = idPhrase.toLowerCase();
+            console.log(`trying to login ${username}: ${USERS_WHITELIST.indexOf(username)}...`);
+            if( USERS_WHITELIST.indexOf(username) == -1 ) return res.status(401).json({ error: 'Mmmh, non ci siamo. Qui è ancora chiuso, vai su /luna' })
+            
             const existingUser = await db.get('SELECT * FROM users WHERE username = ?', username);
             if (existingUser) {
                 return res.status(409).json({ error: 'Questa frase è già in uso.' });
@@ -84,7 +92,10 @@ export default function(db) {
         if (!idPhrase) return res.status(400).json({ error: 'Frase identificativa mancante.' });
         try {
             // Cerchiamo l'utente usando la frase come username
-            const username = idPhrase;
+            const username = idPhrase.toLowerCase();
+            console.log(`trying to login ${username}: ${USERS_WHITELIST.indexOf(username)}...`);
+            if( USERS_WHITELIST.indexOf(username) == -1 ) return res.status(401).json({ error: 'Mmmh, non ci siamo. Qui è ancora chiuso, vai su /luna' })
+            
             const user = await db.get('SELECT * FROM users WHERE username = ?', username);
 
             if (!user || !user.hashedPassword) {

@@ -49,7 +49,13 @@ export async function setupDatabase() {
             FOREIGN KEY (userId) REFERENCES users(id)
         )
     `);
-
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS requests (
+        ip TEXT PRIMARY KEY,
+        count INTEGER DEFAULT 1,
+        lastRequestAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
     console.log('✅ Tabelle del database pronte.');
     return db;
   } catch (err) {
@@ -117,6 +123,18 @@ export async function getSessionForWhip(db, sessionId) {
         sessionId
     );
 }
+/**
+ * Recupera una sessione esistente che ha già un whepUrl.
+ * @param {Database} db - L'istanza del database.
+ * @param {string} sessionId - L'ID della sessione.
+ * @returns {Promise<object|null>} La sessione trovata o null.
+ */
+export async function getSessionForWhep(db, sessionId) {
+    return db.get(
+        'SELECT streamId, whepUrl FROM sessions WHERE sessionId = ? AND whepUrl IS NOT NULL',
+        sessionId
+    );
+}
 
 /**
  * Salva i dettagli WHIP (streamId, whipUrl) per una sessione.
@@ -154,7 +172,39 @@ export async function saveWhepUrlDetails(db, sessionId, whepUrl) {
         console.error("Errore DB [saveWhepUrlDetails]:", err.message);
     }
 }
+/**
+ * Trova una richiesta per IP o ne crea una nuova, incrementando il contatore.
+ * Questa funzione utilizza un'operazione "upsert" (INSERT ON CONFLICT)
+ * che è atomica e più efficiente rispetto a un approccio SELECT-then-INSERT/UPDATE.
+ *
+ * @param {object} db - L'istanza del database aperta con 'sqlite'.
+ * @param {string} ip - L'indirizzo IP da cercare o creare.
+ * @returns {Promise<object>} Un oggetto con l'ip e il conteggio aggiornato (es. { ip: '127.0.0.1', count: 5 }).
+ */
+export async function findOrCreateRequest(db, ip) {
+  const upsertQuery = `
+    INSERT INTO requests (ip, count, lastRequestAt)
+    VALUES (?, 1, CURRENT_TIMESTAMP)
+    ON CONFLICT(ip) DO UPDATE SET
+      count = count + 1,
+      lastRequestAt = CURRENT_TIMESTAMP;
+  `;
 
+  try {
+    // 1. Esegui l'operazione di "upsert".
+    // Questa singola query gestisce sia il caso di creazione che di aggiornamento.
+    await db.run(upsertQuery, ip);
+
+    // 2. Dopo l'operazione, recupera il record aggiornato per restituirlo.
+    const result = await db.get('SELECT ip, count FROM requests WHERE ip = ?', ip);
+    return result;
+
+  } catch (err) {
+    console.error("❌ Errore in findOrCreateRequest:", err.message);
+    // Rilancia l'errore per permettere al chiamante di gestirlo se necessario.
+    throw err;
+  }
+}
 /**
  * Aggiorna il conteggio dei partecipanti e lo stato di attività di una sessione.
  * @param {Database} db - L'istanza del database.
@@ -165,7 +215,7 @@ export async function updateDbParticipantCount(db, sessionId, count) {
     try {
         // Le sessioni Theia non vengono disattivate
         if (sessionId.endsWith('_THEIA')) return;
-        await db.run('UPDATE sessions SET participantCount = 0, isActive = 0 WHERE sessionId = ? OR sessionId = ?', [sessionId, sessionId + '_THEIA_SESSION']);
+        await db.run('UPDATE sessions SET participantCount = 0, isActive = 0 WHERE sessionId = ? OR sessionId = ?', [sessionId, sessionId + '_THEIA']);
     } catch (err) {
         console.error("Errore DB [updateDbParticipantCount]:", err.message);
     }

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="it">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -23,45 +24,200 @@
             --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
             --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
         }
-        body { margin: 0; padding: 1.5rem; box-sizing: border-box; background-color: var(--background-color); color: var(--text-color); font-family: var(--font-family-sans); display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .login-card { background-color: var(--container-bg); border-radius: var(--border-radius); box-shadow: var(--shadow-lg); padding: 2.5rem 3rem; width: 100%; max-width: 420px; text-align: center; animation: fadeIn 0.5s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .login-card h1 { font-size: 2rem; font-weight: 700; margin: 0 0 0.5rem 0; }
-        .login-card .subtitle { color: var(--text-color); opacity: 0.7; margin-bottom: 2.5rem; }
-        .input-group { text-align: left; margin-bottom: 1.5rem; }
-        .input-group label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem; }
-        .input-group input { width: 100%; padding: 0.8rem 1rem; border-radius: 8px; border: 2px solid var(--border-color); background-color: var(--background-color); color: var(--text-color); font-size: 1rem; font-family: var(--font-family-sans); box-sizing: border-box; transition: all 0.2s ease; }
-        .input-group input:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2); }
-        .button { width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.75rem; padding: 1rem; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: 700; cursor: pointer; box-shadow: var(--shadow-md); transition: all 0.2s ease; margin-top: 1rem; }
-        .button:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
-        .button svg { width: 24px; height: 24px; }
-        .primary-button { background: var(--accent-color); color: white; }
-        .secondary-button { background: transparent; color: var(--accent-color); border: 2px solid var(--accent-color); }
-        .divider { display: flex; align-items: center; text-align: center; color: #a0aec0; margin: 2rem 0; }
-        .divider::before, .divider::after { content: ''; flex: 1; border-bottom: 1px solid var(--border-color); }
-        .divider:not(:empty)::before { margin-right: .25em; }
-        .divider:not(:empty)::after { margin-left: .25em; }
-        .message { margin-top: 1.5rem; font-weight: 600; min-height: 20px; }
-        .message.success { color: var(--success-color); }
-        .message.error { color: var(--error-color); }
+
+        body {
+            margin: 0;
+            padding: 1.5rem;
+            box-sizing: border-box;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            font-family: var(--font-family-sans);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .login-card {
+            background-color: var(--container-bg);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-lg);
+            padding: 2.5rem 3rem;
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .login-card h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0 0 0.5rem 0;
+        }
+
+        .login-card .subtitle {
+            color: var(--text-color);
+            opacity: 0.7;
+            margin-bottom: 2.5rem;
+        }
+
+        .input-group {
+            text-align: left;
+            margin-bottom: 1.5rem;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            border-radius: 8px;
+            border: 2px solid var(--border-color);
+            background-color: var(--background-color);
+            color: var(--text-color);
+            font-size: 1rem;
+            font-family: var(--font-family-sans);
+            box-sizing: border-box;
+            transition: all 0.2s ease;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        .button {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            padding: 1rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: var(--shadow-md);
+            transition: all 0.2s ease;
+            margin-top: 1rem;
+        }
+
+        .button:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .button svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .primary-button {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        .secondary-button {
+            background: transparent;
+            color: var(--accent-color);
+            border: 2px solid var(--accent-color);
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            color: #a0aec0;
+            margin: 2rem 0;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .divider:not(:empty)::before {
+            margin-right: .25em;
+        }
+
+        .divider:not(:empty)::after {
+            margin-left: .25em;
+        }
+
+        .message {
+            margin-top: 1.5rem;
+            font-weight: 600;
+            min-height: 20px;
+        }
+
+        .message.success {
+            color: var(--success-color);
+        }
+
+        .message.error {
+            color: var(--error-color);
+        }
+
+        .header-title {
+            text-align: center;
+            color: var(--accent-color);
+            font-size: 60px!important;
+            opacity: 0;
+            transition: opacity 1.5s ease-out;
+        }
     </style>
 </head>
+
 <body>
     <div class="login-card">
+        <h1 id="main-title" class="header-title">inGoya</h1>
         <h1>Bentornatide, benvenut'!</h1>
         <p class="subtitle">Scrivi la tua frase segreta per entrare. Se è la prima volta, verrà registrata.</p>
-        
+
         <div class="input-group">
             <label for="id-phrase">La tua frase segreta</label>
             <input type="text" id="id-phrase" required placeholder="scrivi qualcosa qua...">
         </div>
 
         <button id="phrase-btn" class="button primary-button">Avanti tutta</button>
-        
+
         <div class="divider">oppure</div>
-        
+
         <button id="passkey-btn" class="button secondary-button">
-             <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M12.963 2.286a.75.75 0 00-1.071 1.052A6.75 6.75 0 0115.75 12c0 2.454-1.305 4.61-3.25 5.75a.75.75 0 10.866 1.3A8.25 8.25 0 0017.25 12a8.25 8.25 0 00-4.287-7.214z" clip-rule="evenodd" /><path fill-rule="evenodd" d="M11.637 2.543a.75.75 0 011.052-1.071 8.25 8.25 0 014.288 7.214 8.25 8.25 0 01-8.25 8.25.75.75 0 010-1.5 6.75 6.75 0 006.75-6.75 6.75 6.75 0 00-6.448-6.732.75.75 0 01-.29-1.468z" clip-rule="evenodd" /><path d="M9.75 10.5a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-.008a.75.75 0 01-.75-.75v-.008zM8.25 12a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v-.008zM9.75 13.5a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-.008a.75.75 0 01-.75-.75v-.008zM6.75 10.5a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75H7.5a.75.75 0 01-.75-.75v-.008z" /><path fill-rule="evenodd" d="M4.5 9.75A.75.75 0 015.25 9h5.25a.75.75 0 010 1.5H6v9.75a.75.75 0 01-1.5 0V9.75z" clip-rule="evenodd" /></svg>
+            <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd"
+                    d="M12.963 2.286a.75.75 0 00-1.071 1.052A6.75 6.75 0 0115.75 12c0 2.454-1.305 4.61-3.25 5.75a.75.75 0 10.866 1.3A8.25 8.25 0 0017.25 12a8.25 8.25 0 00-4.287-7.214z"
+                    clip-rule="evenodd" />
+                <path fill-rule="evenodd"
+                    d="M11.637 2.543a.75.75 0 011.052-1.071 8.25 8.25 0 014.288 7.214 8.25 8.25 0 01-8.25 8.25.75.75 0 010-1.5 6.75 6.75 0 006.75-6.75 6.75 6.75 0 00-6.448-6.732.75.75 0 01-.29-1.468z"
+                    clip-rule="evenodd" />
+                <path
+                    d="M9.75 10.5a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-.008a.75.75 0 01-.75-.75v-.008zM8.25 12a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v-.008zM9.75 13.5a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-.008a.75.75 0 01-.75-.75v-.008zM6.75 10.5a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75H7.5a.75.75 0 01-.75-.75v-.008z" />
+                <path fill-rule="evenodd"
+                    d="M4.5 9.75A.75.75 0 015.25 9h5.25a.75.75 0 010 1.5H6v9.75a.75.75 0 01-1.5 0V9.75z"
+                    clip-rule="evenodd" />
+            </svg>
             <span>Continua con Passkey</span>
         </button>
 
@@ -86,16 +242,16 @@
             if (!response.ok) {
                 throw new Error(data.error || 'Qualcosa è andato storto.');
             }
-            
+
             if (data.success) {
                 messageEl.textContent = 'Successo! Reindirizzamento in corso...';
                 messageEl.className = 'message success';
-                
+
                 setTimeout(() => {
                     const urlParams = new URLSearchParams(window.location.search);
-                    window.location.href = urlParams.has('redirect_uri') ? 
-                                                urlParams.get('redirect_uri') : 
-                                                    '/ingoya.html';
+                    window.location.href = urlParams.has('redirect_uri') ?
+                        urlParams.get('redirect_uri') :
+                        '/ingoya.html';
                 }, 1000);
             } else {
                 throw new Error('Risposta del server non valida.');
@@ -126,9 +282,9 @@
                     await handleAuthResponse(loginRes);
                     return;
                 }
-                
+
                 // Se il login fallisce con 401 (non trovato), tenta la registrazione
-                if (loginRes.status === 401) { 
+                if (loginRes.status === 401) {
                     messageEl.textContent = 'Frase non trovata, provo a registrarla...';
                     const registerRes = await fetch('/auth/register-phrase', {
                         method: 'POST',
@@ -156,8 +312,8 @@
 
         // --- GESTORE PER IL LOGIN/REGISTRAZIONE CON PASSKEY (invariato) ---
         passkeyBtn.addEventListener('click', async () => {
-             // Per usare le Passkey, abbiamo ancora bisogno di un identificatore (username/email).
-             // Decidiamo di usare il valore inserito nel campo frase anche per questo.
+            // Per usare le Passkey, abbiamo ancora bisogno di un identificatore (username/email).
+            // Decidiamo di usare il valore inserito nel campo frase anche per questo.
             const loginIdentifier = idPhraseInput.value;
             if (!loginIdentifier) {
                 messageEl.textContent = 'Per favore, inserisci la tua frase anche per usare la Passkey.';
@@ -201,6 +357,10 @@
                 }
             }
         });
+        window.addEventListener('DOMContentLoaded', function(){
+            setTimeout(()=>document.getElementById('main-title').style.opacity = 1, 500 )
+        })
     </script>
 </body>
+
 </html>

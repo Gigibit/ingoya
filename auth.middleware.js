@@ -13,7 +13,7 @@ export function protectRoute(req, res, next) {
         // I browser che navigano una pagina lo fanno, le chiamate API no.
         if (req.accepts('html')) {
             // Se è una richiesta di navigazione, reindirizza alla pagina di login.
-            return res.redirect('/');
+            return res.redirect('/luna');
         }
         // Altrimenti, è una richiesta API, quindi invia un errore JSON.
         return res.status(401).json({ error: 'Accesso non autorizzato.' });
