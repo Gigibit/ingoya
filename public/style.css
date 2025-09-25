@@ -41,7 +41,6 @@ video::-webkit-media-controls { display: none; }
 
 /* Contenitore Video */
 #video-container {
-    /* position: relative; */
     width: 100%;
     flex-grow: 1;
     min-height: 0;
@@ -78,50 +77,44 @@ video::-webkit-media-controls { display: none; }
     padding: 2px;
 }
 #interaction-buttons button {
-    /* Dimensioni e aspetto */
     width: 44px;
     height: 44px;
-    padding: 8px; /* Spazio interno per l'icona */
-    border-radius: 50%; /* Lo rende rotondo */
-    background-color: rgba(99, 102, 241, 0.3); /* Sfondo semi-trasparente per la visibilità */
-    border: none; /* Rimuove il bordo di default */
+    padding: 8px;
+    border-radius: 50%;
+    background-color: rgba(99, 102, 241, 0.3);
+    border: none;
     cursor: pointer;
     transition: background-color 0.2s ease;
-    box-sizing: border-box; /* Assicura che il padding non aumenti la dimensione */
+    box-sizing: border-box;
     margin: 0 auto;
 }
 .icon-unmuted {
-    display: none; /* L'audio parte muto, quindi questa è nascosta */
+    display: none;
 }
 body.audio-unmuted .icon-muted {
-    display: none; /* Nascondi l'icona "muto" quando l'audio è attivo */
+    display: none;
 }
 body.audio-unmuted .icon-unmuted {
-    display: block; /* Mostra l'icona "attivo" quando l'audio è attivo */
+    display: block;
 }
 #interaction-buttons button:hover {
-    background-color: rgba(99, 102, 241, 0.5); /* Sfondo più scuro al passaggio del mouse */
+    background-color: rgba(99, 102, 241, 0.5);
 }
 
-/* Stile per l'icona SVG dentro il bottone */
 #interaction-buttons button svg {
-    /* Usa 'stroke' per colorare le linee dell'icona, non 'fill' */
     stroke: var(--accent-color);
-    width: 100%; /* L'icona riempie lo spazio del bottone */
+    width: 100%;
     height: 100%;
 }
 .icon-exit-fullscreen {
     display: none;
 }
 
-/* Quando il body ha la classe 'fullscreen-active'... */
 body.fullscreen-active .icon-enter-fullscreen {
-    /* ...nascondi l'icona "enter" */
     display: none;
 }
 
 body.fullscreen-active .icon-exit-fullscreen {
-    /* ...e mostra l'icona "exit" */
     display: block;
 }
 
@@ -159,7 +152,7 @@ body.fullscreen-active .icon-exit-fullscreen {
     justify-content: center;
     align-items: flex-end;
     gap: 1.5rem;
-    padding-bottom: 1rem; /* Aggiunto padding per più respiro */
+    padding-bottom: 1rem;
     transition: opacity .5s ease-in-out;
     z-index: 9;
     position: fixed;
@@ -256,14 +249,12 @@ body.fullscreen-active .icon-exit-fullscreen {
     border: none;
 }
 
-/* Logica per l'icona dinamica */
 #update-params-btn .arrow-icon { display: none; }
 #update-params-btn .mic-icon { display: block; }
 #update-params-btn.has-text .mic-icon { display: none; }
 #update-params-btn.has-text .arrow-icon { display: block; }
 #update-params-btn .arrow-icon { color: white; }
 
-/* Stile per il video Picture-in-Picture */
 #playback-video.mini-video {
     position: fixed;
     top: auto;
@@ -273,7 +264,7 @@ body.fullscreen-active .icon-exit-fullscreen {
     width: 220px;
     height: 124px;
     border-radius: 12px;
-    background-color: var(--text-color); /* Corretto colore di sfondo */
+    background-color: var(--text-color);
     object-fit: cover;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
     z-index: 9999;
@@ -286,9 +277,6 @@ body.fullscreen-active .icon-exit-fullscreen {
     from { transform: scale(0.8); opacity: 0; }
     to { transform: scale(1); opacity: 1; }
 }
-
-/* --- NUOVO LOADER CON ONDA GRADIENTE LUMINOSA --- */
-/* --- LOADER CON GRADIENTE CONTINUO E WAVE LUMINOSA --- */
 
 @keyframes rotate-gradient {
     from { transform: translate(-50%, -50%) rotate(0deg); }
@@ -307,11 +295,10 @@ body.fullscreen-active .icon-exit-fullscreen {
     transition: opacity 0.5s ease-out;
     overflow: hidden;
     box-sizing: border-box;
-    padding: 6px; /* padding per separare il bordo dal video */
+    padding: 6px;
     background: magenta;
 }
 
-/* Anello luminoso animato */
 #loader::before, .loader::before {
     content: '';
     position: absolute;
@@ -319,23 +306,15 @@ body.fullscreen-active .icon-exit-fullscreen {
     left: 50%;
     width: 180%;
     height: 180%;
-    background: conic-gradient(
-        from 0deg,
-        var(--accent-color) 0%,
-        rgba(99, 102, 241, 0.3) 25%,
-        transparent 50%,
-        rgba(99, 102, 241, 0.3) 75%,
-        var(--accent-color) 100%
-    );
+    background: conic-gradient( from 0deg, var(--accent-color) 0%, rgba(99, 102, 241, 0.3) 25%, transparent 50%, rgba(99, 102, 241, 0.3) 75%, var(--accent-color) 100% );
     animation: rotate-gradient 2.5s linear infinite;
     transform-origin: center center;
     transform: translate(-50%, -50%);
-    filter: blur(4px) brightness(1.4); /* più glow */
+    filter: blur(4px) brightness(1.4);
     border-radius: 50%;
     opacity: 0.9;
 }
 
-/* Maschera centrale: crea solo il bordo visibile */
 #loader::after, .loader::after {
     content: '';
     position: absolute;
@@ -343,17 +322,15 @@ body.fullscreen-active .icon-exit-fullscreen {
     left: 10px;
     right: 10px;
     bottom: 10px;
-    background: #000; /* colore video-container */
+    background: #000;
     border-radius: calc(var(--border-radius) - 8px);
 }
 
-/* Sparizione del loader */
 #loader.loading-finished, .loader.loading-finished {
     opacity: 0;
 }
 
 
-/* Stili per la vista slider */
 body.slider-view-active {
     display: block;
     padding: 0;
@@ -375,7 +352,6 @@ body.slider-view-active {
 }
 
 
-/* --- NUOVA TRANSIZIONE SLIDE --- */
 .slide {
     position: absolute;
     top: 0;
@@ -386,7 +362,6 @@ body.slider-view-active {
     align-items: center;
     justify-content: center;
     background-color: var(--background-color);
-    /* Inizia fuori schermo, in basso */
     transform: translateY(100%);
     opacity: 1;
     transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
@@ -396,20 +371,15 @@ body.slider-view-active {
 }
 
 .slide.is-visible {
-    /* Si sposta in vista */
     transform: translateY(0);
     pointer-events: auto;
     z-index: 1;
 }
 
 .slide.is-exiting {
-    /* Scivola via verso l'alto */
     transform: translateY(-100%);
     z-index: 0;
 }
-/* --- FINE NUOVA TRANSIZIONE --- */
-
-/* Logger on-screen (invariato) */
 #on-screen-logger {
     position: fixed;
     top: 0;
@@ -445,13 +415,11 @@ body.slider-view-active {
     color: #ffdddd;
 }
 
-/* Feedback visivo registrazione (invariato) */
 #update-params-btn.is-recording {
     background-color: rgba(255, 82, 82, 0.5);
     animation: pulse 1.5s infinite ease-in-out;
 }
 
-/* Nuova animazione "pulse" più intensa */
 @keyframes pulse {
     0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.7); opacity: 1;}
     50% { transform: scale(1.1); box-shadow: 0 0 20px 10px rgba(255, 82, 82, 0.5); opacity: 0.5; }
@@ -460,25 +428,23 @@ body.slider-view-active {
 
 .video-inner {
     position: absolute;
-    inset: 12px; /* padding interno rispetto al loader */
+    inset: 12px;
     border-radius: calc(var(--border-radius) - 12px);
     overflow: hidden;
     z-index: 1;
 }
 
-/* Entrambi i video riempiono lo stesso box */
 .video-inner video {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    object-fit: cover;   /* riempie senza bande */
+    object-fit: cover;
     object-position: center;
     border-radius: inherit;
 }
 
-/* Quando l'overlay è attivo, i controlli tornano visibili */
 body.slider-view-active.config-overlay-active #controls-section {
     z-index: 10001; 
     bottom: 0;
@@ -489,7 +455,6 @@ body.slider-view-active.config-overlay-active #controls-section {
     opacity: 1;
 }
 
-/* Il video si sposta al centro e si ingrandisce */
 body.slider-view-active.config-overlay-active #playback-video.mini-video {
     width: 60vw;
     max-width: 800px;
@@ -513,19 +478,13 @@ body.slider-view-active.config-overlay-active #playback-video.mini-video {
     right: 0;
     font-size: 100px;
     animation: initial-fade-out 2s forwards;
-    animation-delay: 1s; /* Ritardo per far apparire il titolo per 1 secondo */
+    animation-delay: 1s;
 }
 
-/* Nuova animazione per il titolo */
 @keyframes initial-fade-out {
-    from {
-        opacity: 1;
-    }
-    to {
-        opacity: 0;
-    }
+    from { opacity: 1; }
+    to { opacity: 0; }
 }
-/* Stili per il contenitore dei likes */
 #likes-container {
     padding: 5px 15px;
     border-radius: 20px;
@@ -562,12 +521,11 @@ body.slider-view-active.config-overlay-active #playback-video.mini-video {
     color: #ff0077;
 }
 
-/* Stili per l'animazione del cuore volante */
 .flying-heart {
     position: fixed;
     top: 50%;
-    left: 50%; /* Posiziona il cuore al centro orizzontalmente */
-    transform: translate(-50%, -50%); /* Centra il cuore */
+    left: 50%;
+    transform: translate(-50%, -50%);
     color: #ff0077;
     font-size: 2em;
     z-index: 9999;
@@ -576,52 +534,42 @@ body.slider-view-active.config-overlay-active #playback-video.mini-video {
 }
 
 @keyframes flying-heart-animation {
-    0% {
-        transform: scale(0.5) translate(-50%, -50%);
-        opacity: 0;
-    }
-    50% {
-        transform: scale(1.5) translate(-50%, -50%);
-        opacity: 1;
-    }
-    100% {
-        transform: scale(0.5) translate(0, -50%);
-        opacity: 0;
-    }
+    0% { transform: scale(0.5) translate(-50%, -50%); opacity: 0; }
+    50% { transform: scale(1.5) translate(-50%, -50%); opacity: 1; }
+    100% { transform: scale(0.5) translate(0, -50%); opacity: 0; }
 }
-/* Nuova animazione per il titolo "flash" */
 @keyframes flash-fade-in {
   0% { opacity: 0; transform: scale(0.5); }
   25% { opacity: 1; transform: scale(1.1); }
   50% { opacity: 1; transform: scale(1); }
   100% { opacity: 0.5; transform: scale(1); }
 }
-/* Classe per l'animazione del titolo */
 .flash-fade-in {
   animation: flash-fade-in 1.5s ease-out forwards;
 }
 
-/* Stili per il pulsante di chiamata */
 #top-right-buttons {
     position: absolute;
     top: 20px;
     right: 20px;
     z-index: 1000;
     display: flex;
-    gap: 10px; /* Spazio tra i pulsanti */
     flex-direction: column;
+    align-items: center;
+    gap: 15px;
 }
 
-#call-button-container {
+#call-button-container,
+#participants-button-container {
     background-color: rgba(0, 0, 0, 0.5);
     padding: 5px;
     border-radius: 50%;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
     cursor: pointer;
-    margin: 0 auto;
 }
 
-#call-button-container button {
+#call-button-container button,
+#participants-button-container button {
     background: none;
     border: none;
     padding: 0;
@@ -639,7 +587,12 @@ body.slider-view-active.config-overlay-active #playback-video.mini-video {
     fill: #ffffff;
 }
 
-/* Stili per l'overlay del tastierino */
+#participants-button-container i {
+    color: #ffffff;
+    font-size: 20px;
+}
+
+
 #dialpad-overlay {
     position: fixed;
     top: 0;
@@ -763,4 +716,102 @@ body.slider-view-active.config-overlay-active #playback-video.mini-video {
 }
 .hidden {
     display: none;
+}
+
+#participants-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+#participants-modal.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+#participants-modal-content {
+    background-color: var(--container-bg);
+    padding: 20px;
+    border-radius: var(--border-radius);
+    width: 90%;
+    max-width: 450px;
+    box-shadow: var(--shadow-lg);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.participants-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.participants-modal-header h2 {
+    margin: 0;
+    color: var(--accent-color);
+    font-family: 'Fredoka One', sans-serif;
+}
+
+#participants-modal-close {
+    background: none;
+    border: none;
+    font-size: 2rem;
+    cursor: pointer;
+    color: var(--text-color);
+    line-height: 1;
+}
+
+#participants-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    overflow-y: auto;
+}
+
+#participants-list li {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+#participants-list li:last-child {
+    border-bottom: none;
+}
+
+#participants-list button {
+    width: 100%;
+    padding: 12px;
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: var(--font-family-sans);
+    font-weight: bold;
+    text-align: center;
+    transition: background-color 0.2s ease;
+}
+
+#participants-list button:hover {
+    background-color: #4f52c4;
+}
+
+#participants-list .no-participants {
+    text-align: center;
+    color: #888;
+    padding: 20px;
+    border-bottom: none;
 }

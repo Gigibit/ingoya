@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap" rel="stylesheet">
     <link href="style.css" rel="stylesheet">
-    <!-- FontAwesome per le icone dei like -->
+    <!-- FontAwesome per le icone -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 </head>
 
@@ -18,12 +18,17 @@
     <h1 id="main-title" class="header-title">inGoya</h1>
 
     <div id="top-right-buttons">
+        <!-- Pulsante Partecipanti -->
+        <div id="participants-button-container">
+            <button id="participants-button" title="Participants">
+                <i class="fas fa-users"></i>
+            </button>
+        </div>
+        
         <!-- Contenitore per i like in alto a destra -->
         <div id="likes-container">
             <button id="like-button" title="Like">
-                <!-- Icona del cuore pieno -->
                 <i class="fas fa-heart filled-heart" style="display: none;"></i>
-                <!-- Icona del cuore vuoto -->
                 <i class="far fa-heart unfilled-heart"></i>
             </button>
             <span id="like-count">0</span>
@@ -65,6 +70,19 @@
             </div>
         </div>
     </div>
+
+    <!-- Modale dei Partecipanti -->
+    <div id="participants-modal" class="hidden">
+        <div id="participants-modal-content">
+            <div class="participants-modal-header">
+                <h2>Chi ti sta guardando</h2>
+                <button id="participants-modal-close">&times;</button>
+            </div>
+            <ul id="participants-list">
+                <!-- I partecipanti verranno aggiunti qui dinamicamente -->
+            </ul>
+        </div>
+    </div>
     
     <!-- Contenitore principale per il video dell'utente e il loader iniziale -->
     <div id="video-container">
@@ -102,26 +120,21 @@
     </div>
 
     <div id="interaction-buttons">
-         <!-- NUOVO: Bottone Mute/Unmute -->
         <button id="mute-btn" title="Toggle Mute">
-            <!-- Icona per RIATTIVARE audio (nascosta di default) -->
             <svg class="icon-unmuted" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
             </svg>
-            <!-- Icona per MUTARE audio (visibile di default) -->
             <svg class="icon-muted" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
             </svg>
         </button>
 
         <button id="fullscreen-btn" title="Toggle Fullscreen">
-            <!-- Icona per ENTRARE in fullscreen (visibile di default) -->
             <svg class="icon-enter-fullscreen" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                 stroke-width="2" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round"
                     d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M20.25 20.25v-4.5m0 4.5h-4.5m4.5 0L15 15m-6 0L3.75 20.25m16.5-16.5L15 9" />
             </svg>
-            <!-- Icona per USCIRE da fullscreen (nascosta di default) -->
             <svg class="icon-exit-fullscreen" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                 stroke-width="2" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round"
@@ -130,7 +143,6 @@
         </button>
     </div>
 
-    <!-- MODIFICA: Slide di Theia sempre presente ma nascosta -->
     <div id="theia-slide" class="slide" style="display: none;">
         <video class="playback-video" autoplay playsinline muted></video>
     </div>
@@ -142,13 +154,21 @@
         window.selfMode = true;
         window.audioManaged = true;
         const __app_id = "default-app-id";
-        const __firebase_config = JSON.stringify();
+        const __firebase_config = JSON.stringify({
+          apiKey: "AIzaSyDu5gNno6axzMZ586YkAErw72SYsQAB8p4",
+          authDomain: "ingoya-2209e.firebaseapp.com",
+          projectId: "ingoya-2209e",
+          storageBucket: "ingoya-2209e.firebasestorage.app",
+          messagingSenderId: "708336111684",
+          appId: "1:708336111684:web:8a791a9f03b2d314bd2c11"
+        });
         const __initial_auth_token = "dummy-auth-token";
     </script>
     <script src="/socket.io/socket.io.js"></script>
     <script type="text/javascript" src="dat.gui.min.js"></script>
     <script type="text/javascript" src="caos.js"></script>
     <script type="module" src="interpreter.js"></script>
+    <script type="module" src="screen_debugger.js"></script>
     <script type="module" src="Theia.js"></script>
     <script type="module" src="SocialLayer.js"></script>
     <script type="module" src="AppController.js"></script>

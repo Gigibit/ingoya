@@ -4,34 +4,23 @@ import { Theia } from './Theia.js';
 export class ConnectionManager {
     constructor(MOCK, socialLayer) {
         this.MOCK = MOCK;
-        //TODO: GET THIS FROM /SESSION-STREAM
         this.sessionId = this._generateSessionId();
         this.socialLayer = socialLayer;
         
+        // MODIFICA: Traccia lo stream che l'utente sta guardando
+        this.currentViewingSessionId = null;
+
         this.MOCK_RESPONSES = {
-            '/random-stream': {
-                ok: true,
-                status: 200,
-                json: () => Promise.resolve({ sessionId: 'Z12345', whepUrl: 'mockWhepUrl' })
-            },
-            '/stream-session': {
-                ok: true,
-                status: 200,
-                json: () => Promise.resolve({ whipUrl: 'mockWhipUrl' })
-            },
-            '/update-stream-params': {
-                ok: true,
-                status: 200
-            },
+            '/random-stream': { ok: true, status: 200, json: () => Promise.resolve({ sessionId: 'Z12345', whepUrl: 'mockWhepUrl' }) },
+            '/stream-session': { ok: true, status: 200, json: () => Promise.resolve({ whipUrl: 'mockWhipUrl' }) },
+            '/update-stream-params': { ok: true, status: 200 },
         };
 
         this.uiController = null;
         this.theiaInstance = null;
-        
         this.currentAudioPartnerSocketId = null;
         this.isTransitioning = false;
         this.theiaRunning = false;
-        
         this.livepeerConnection = null;
         this.p2pAudioConnection = null;
         this.localStream = null;
@@ -39,7 +28,6 @@ export class ConnectionManager {
         this.audioContext = null;
         this.audioSource = null;
         this.delayNode = null;
-        
         this.loader = document.getElementById('loader');
         this.theiaSlide = document.getElementById('theia-slide');
         
@@ -91,13 +79,11 @@ export class ConnectionManager {
             }
 
             if (isCameraActive && hasCamera) {
-                console.log("Accesso a fotocamera e microfono...");
                 this.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 this.localAudioSubStream = new MediaStream(this.localStream.getAudioTracks());
                 this.uiController.setLocalPreviewStream(this.localStream);
                 if (canvasContainer) canvasContainer.style.opacity = '0';
             } else {
-                console.log("Accesso a microfono e stream del canvas...");
                 this.localAudioSubStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 if (canvasContainer) canvasContainer.style.display = '1';
                 const fluidCanvas = document.getElementById('theia-canvas');
@@ -112,7 +98,7 @@ export class ConnectionManager {
             }
         } catch (err) {
             console.error("Accesso ai dispositivi multimediali fallito:", err);
-            this.uiController.alert("Impossibile accedere al microfono o alla fotocamera. Controlla i permessi del browser e assicurati che nessun'altra applicazione li stia usando.");
+            this.uiController.alert("Impossibile accedere al microfono o alla fotocamera. Controlla i permessi del browser.");
             this.uiController.setCameraState(false);
         }
     }
@@ -130,10 +116,7 @@ export class ConnectionManager {
     
     async _hasVideoInput() {
         try {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-                console.warn("API mediaDevices non supportata.");
-                return false;
-            }
+            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return false;
             const devices = await navigator.mediaDevices.enumerateDevices();
             return devices.some(device => device.kind === 'videoinput');
         } catch (e) {
@@ -203,32 +186,30 @@ export class ConnectionManager {
             }
         });
         this.socket.on('hang-up', () => this.hangUp());
+        
+        this.socket.on('participants-list', (participants) => {
+            if (this.uiController) {
+                this.uiController.updateParticipantsList(participants);
+            }
+        });
     }
 
     async main() {
         if (this.localStream) return;
         
-        // Verifica se l'utente ha una fotocamera e ha già concesso i permessi
         const hasCamera = await this._hasVideoInput();
         if (hasCamera) {
             try {
-                // Tenta di ottenere lo stream della videocamera per verificare i permessi
                 const testStream = await navigator.mediaDevices.getUserMedia({ video: true });
                 testStream.getTracks().forEach(track => track.stop());
-                
-                // Se i permessi ci sono, attiva la telecamera
                 this.uiController.setCameraState(true);
-                await this.toggleVideoSource();
             } catch (err) {
-                // Se i permessi non ci sono, avvia l'esperienza predefinita (canvas)
                 this.uiController.setCameraState(false);
-                await this.toggleVideoSource();
             }
         } else {
-            // Se non c'è una telecamera, avvia l'esperienza predefinita (canvas)
             this.uiController.setCameraState(false);
-            await this.toggleVideoSource();
         }
+        await this.toggleVideoSource();
         
         this.uiController.setMainTitleOpacity(0);
         if (this.localStream) {
@@ -236,6 +217,19 @@ export class ConnectionManager {
         }
     }
     
+    // MODIFICA: Funzione per notificare al server i cambi di visualizzazione
+    _updateViewingStatus(newlyViewedSessionId) {
+        if (this.socket) {
+            // Notifica al server che non stiamo più guardando il vecchio stream (se ce n'era uno)
+            if (this.currentViewingSessionId) {
+                this.socket.emit('stop-watching', { wasViewingSessionId: this.currentViewingSessionId });
+            }
+            // Notifica il nuovo stream
+            this.socket.emit('start-watching', { viewingSessionId: newlyViewedSessionId });
+        }
+        this.currentViewingSessionId = newlyViewedSessionId;
+    }
+
     async findNextExperience(sessionId) {
         if (this.isTransitioning) return;
         this.isTransitioning = true;
@@ -251,28 +245,30 @@ export class ConnectionManager {
             }
             const data = await response.json();
             
+            // MODIFICA: Aggiorna lo stato di visualizzazione
+            this._updateViewingStatus(data.sessionId);
+
             if (data.sessionId.endsWith('_THEIA')) {
                 this.uiController.transitionToSlide(this.theiaSlide);
-                if (this.theiaInstance) {
-                    this.theiaInstance.unmute();
-                }
+                if (this.theiaInstance) this.theiaInstance.unmute();
                 this.theiaRunning = true;
             } else {
                 const userSlide = this.uiController.createSlideForStream(data.sessionId, data.whepUrl);
                 this.uiController.transitionToSlide(userSlide);
-                if (this.theiaInstance) {
-                    this.theiaInstance.mute();
-                }
+                if (this.theiaInstance) this.theiaInstance.mute();
                 this.theiaRunning = false;
             }
             this.socialLayer.setupLikesListener(data.sessionId);
         } catch (err) {
             console.warn(err.message + ", mostro Theia.");
+            
+            // MODIFICA: Aggiorna lo stato anche in caso di fallback a Theia
+            const theiaSessionId = `${this.sessionId}_THEIA`;
+            this._updateViewingStatus(theiaSessionId);
+
             this.uiController.transitionToSlide(this.uiController.theiaSlide);
             if (!this.theiaRunning) {
-                if (this.theiaInstance) {
-                    this.theiaInstance.unmute();
-                }
+                if (this.theiaInstance) this.theiaInstance.unmute();
             }
             this.theiaRunning = true;
         }
@@ -285,7 +281,7 @@ export class ConnectionManager {
         }
         this.uiController._hideDialpad();
         this.uiController.switchToSliderView();
-        this.findNextExperience(sessionId);
+        this.findNextExperience(sessionId); // La logica di notifica è già in findNextExperience
     }
     
     async getOrCreateStreamSession(sourceStream) {
@@ -299,13 +295,8 @@ export class ConnectionManager {
             if (!response.ok) throw new Error(`Errore dal server: ${response.statusText}`);
             const sessionData = await response.json();
             if (this.livepeerConnection) this.livepeerConnection.close();
-            this.livepeerConnection = new RTCPeerConnection({
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                ]
-            });
-            sourceStream.getVideoTracks().forEach(track => this.livepeerConnection.addTrack(track, sourceStream));
+            this.livepeerConnection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] });
+            sourceStream.getTracks().forEach(track => this.livepeerConnection.addTrack(track, sourceStream));
             const offer = await this.livepeerConnection.createOffer();
             await this.livepeerConnection.setLocalDescription(offer);
             const whipResponse = await this.fetch(sessionData.whipUrl, {
@@ -348,7 +339,6 @@ export class ConnectionManager {
 
         this.p2pAudioConnection.ontrack = (event) => {
             if (event.track.kind === 'audio') {
-                console.log("Audio track from peer received. Setting up audio delay.");
                 this.audioSource = this.audioContext.createMediaStreamSource(event.streams[0]);
                 this.delayNode = this.audioContext.createDelay(3.0); 
                 this.delayNode.delayTime.value = 0.5;
@@ -358,10 +348,7 @@ export class ConnectionManager {
         };
         this.p2pAudioConnection.onicecandidate = (event) => {
             if (event.candidate && this.currentAudioPartnerSocketId) {
-                this.socket.emit('audio-ice-candidate', {
-                    candidate: event.candidate,
-                    targetSocketId: this.currentAudioPartnerSocketId
-                });
+                this.socket.emit('audio-ice-candidate', { candidate: event.candidate, targetSocketId: this.currentAudioPartnerSocketId });
             }
         };
     }
@@ -383,9 +370,7 @@ export class ConnectionManager {
             this.delayNode = null;
         }
         if (this.audioContext && this.audioContext.state !== 'closed') {
-            this.audioContext.close().then(() => {
-                this.audioContext = null;
-            });
+            this.audioContext.close().then(() => this.audioContext = null);
         }
         const remoteAudioEl = document.getElementById('remote-audio');
         if (remoteAudioEl) remoteAudioEl.remove();
@@ -394,7 +379,6 @@ export class ConnectionManager {
     
     _preloadTheia() {
         if (this.theiaInstance || !this.localAudioSubStream) return;
-        console.log("🤖 Pre-caricamento di Theia in background...");
         this.theiaSlide.dataset.sessionId = `${this.sessionId}_THEIA`;
         this.theiaInstance = new Theia(this.sessionId);
         const theiaVideoEl = this.theiaSlide.querySelector('.playback-video');

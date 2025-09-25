@@ -8,10 +8,8 @@ export class UiController {
         this.isConfigOverlayActive = false;
         this.canExplore = false;
 
-        // Riferimenti ai moduli esterni
         this.socialLayer = null;
 
-        // Elementi DOM
         this.originalPlaybackVideo = document.getElementById('playback-video');
         this.localPreviewOverlay = document.getElementById('local-preview-overlay');
         this.controlsSection = document.getElementById('controls-section');
@@ -24,6 +22,11 @@ export class UiController {
         this.dialpadInput = document.getElementById('dialpad-input');
         this.mainTitle = document.getElementById('main-title');
         this.theiaSlide = document.getElementById('theia-slide');
+        
+        this.participantsButton = document.getElementById('participants-button');
+        this.participantsModal = document.getElementById('participants-modal');
+        this.participantsModalClose = document.getElementById('participants-modal-close');
+        this.participantsList = document.getElementById('participants-list');
     }
     
     setSessionId(sessionId) {
@@ -70,12 +73,10 @@ export class UiController {
         }
         document.addEventListener('fullscreenchange', () => this._handleFullscreenChange());
         
-        // Listener per il pulsante di chiamata
         document.getElementById('call-button').addEventListener('click', () => this._showDialpad());
         document.getElementById('dialpad-dismiss').addEventListener('click', () => this._hideDialpad());
         document.getElementById('dialpad-connect').addEventListener('click', () => this.connectionManager.connectToSession(this.dialpadInput.value));
         
-        // Listener per i bottoni del tastierino
         document.querySelectorAll('.keypad-button').forEach(button => {
             button.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -90,21 +91,61 @@ export class UiController {
             });
         });
 
-        // Listener per chiudere il tastierino cliccando sull'overlay
         this.dialpadOverlay.addEventListener('click', (e) => {
-            if (e.target.id === 'dialpad-overlay') {
-                this._hideDialpad();
-            }
+            if (e.target.id === 'dialpad-overlay') this._hideDialpad();
         });
+
+        this.participantsButton.addEventListener('click', () => this._showParticipantsModal());
+        this.participantsModalClose.addEventListener('click', () => this._hideParticipantsModal());
+        this.participantsModal.addEventListener('click', (e) => {
+            if (e.target.id === 'participants-modal') this._hideParticipantsModal();
+        });
+
+
         this.enableExploreMode();
         this._setupInitialAnimation();
     }
     
-    // Gestisce l'animazione iniziale del titolo
     _setupInitialAnimation() {
         if (this.mainTitle) {
             this.mainTitle.classList.add('initial-fade-out');
         }
+    }
+
+    _showParticipantsModal() {
+        // Richiede al server la lista dei partecipanti per la *propria* sessione
+        this.connectionManager.socket.emit('get-participants', this.sessionId);
+        this.participantsModal.classList.remove('hidden');
+        this.participantsModal.classList.add('visible');
+    }
+
+    _hideParticipantsModal() {
+        this.participantsModal.classList.add('hidden');
+        this.participantsModal.classList.remove('visible');
+    }
+
+    updateParticipantsList(participants) {
+        this.participantsList.innerHTML = '';
+        if (!participants || participants.length === 0) {
+            const li = document.createElement('li');
+            li.textContent = 'Nessuno ti sta guardando in questo momento.';
+            li.classList.add('no-participants');
+            this.participantsList.appendChild(li);
+            return;
+        }
+
+        participants.forEach(participantId => {
+            const li = document.createElement('li');
+            const button = document.createElement('button');
+            button.textContent = `Guarda ${participantId}`;
+            button.dataset.sessionId = participantId;
+            button.addEventListener('click', () => {
+                this.connectionManager.connectToSession(participantId);
+                this._hideParticipantsModal();
+            });
+            li.appendChild(button);
+            this.participantsList.appendChild(li);
+        });
     }
 
     toggleConfigOverlay() {
@@ -188,7 +229,6 @@ export class UiController {
         }
     }
     
-    // Metodi aggiunti per la modularizzazione
     setLocalPreviewStream(stream) {
         this.localPreviewOverlay.srcObject = stream;
         this.localPreviewOverlay.play().catch(e => {});
@@ -271,7 +311,7 @@ export class UiController {
         slide.className = 'slide';
         slide.dataset.sessionId = sessionId;
         slide.innerHTML = `<video class="playback-video" autoplay playsinline muted></video>`;
-        document.body.appendChild(slide); // Usa body perché `streamContainer` non è ancora disponibile
+        document.body.appendChild(slide); 
 
         const videoEl = slide.querySelector('.playback-video');
         this.handleStartPlayback(videoEl, whepUrl);
@@ -299,7 +339,7 @@ export class UiController {
                     audioEl.volume = newVolume;
                 }
             }, intervalTime);
-        } else { // Fade In
+        } else {
             let startVolume = audioEl.volume;
             this.theiaAudioFader = setInterval(() => {
                 currentStep++;
