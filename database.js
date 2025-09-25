@@ -129,3 +129,30 @@ export async function getStreamIdBySessionId(db, sessionId) {
     throw err;
   }
 }
+
+/**
+ * Chiude tutte le sessioni settando isActive = 0.
+ */
+export async function closeEverySession(db) {
+  try {
+    await db.run('UPDATE sessions SET isActive = 0');
+    console.log('🛑 Tutte le sessioni sono state chiuse (isActive = 0).');
+  } catch (err) {
+    console.error("Errore DB [closeEverySession]:", err.message);
+    throw err;
+  }
+}
+
+
+/**
+ * Elimina tutte le sessioni dal database.
+ */
+export async function clearSessions(db) {
+  try {
+    await db.run('DELETE FROM sessions');
+    console.log('🧹 Tutte le sessioni sono state eliminate dal database.');
+  } catch (err) {
+    console.error("Errore DB [clearSessions]:", err.message);
+    throw err;
+  }
+}

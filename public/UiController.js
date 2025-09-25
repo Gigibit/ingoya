@@ -1,3 +1,5 @@
+import { InteractionEvent } from "./InteractionEvent.js";
+
 // o gioia, ch'io conobbi, esser amato amando!
 export class UiController {
     constructor(connectionManager) {
@@ -42,10 +44,10 @@ export class UiController {
         this.originalPlaybackVideo.addEventListener('click', () => {
             if (this.isSliderViewActive) {
                 this.toggleConfigOverlay();
-                const userInteraction = new CustomEvent("userInteraction", {
-                    detail: { type: 'onToggleConfigOverlay', isActive: !this.isConfigOverlayActive }
-                });
-                document.dispatchEvent(userInteraction);
+                InteractionEvent.dispatch({ 
+                    type: 'onToggleConfigOverlay', 
+                    isActive: !this.isConfigOverlayActive 
+                })
             }
         });
         this.promptInput.addEventListener('keydown', (e) => {
@@ -117,11 +119,14 @@ export class UiController {
         this.connectionManager.socket.emit('get-participants', this.sessionId);
         this.participantsModal.classList.remove('hidden');
         this.participantsModal.classList.add('visible');
+        InteractionEvent.dispatch({ type: 'onPartecipantsViewOpened' })
     }
 
     _hideParticipantsModal() {
         this.participantsModal.classList.add('hidden');
         this.participantsModal.classList.remove('visible');
+        InteractionEvent.dispatch({ type: 'shh' })
+        
     }
 
     updateParticipantsList(participants) {
@@ -194,11 +199,15 @@ export class UiController {
         this.dialpadOverlay.classList.remove('hidden');
         this.dialpadOverlay.classList.add('visible');
         this.dialpadInput.value = '';
+        InteractionEvent.dispatch({ type: 'onDialpadViewOpened' })
+
     }
 
     _hideDialpad() {
         this.dialpadOverlay.classList.remove('visible');
         this.dialpadOverlay.classList.add('hidden');
+        InteractionEvent.dispatch({ type: 'shh' })
+
     }
 
     _toggleMute() {
@@ -207,6 +216,9 @@ export class UiController {
         if (this.connectionManager.theiaInstance) {
              this.connectionManager.theiaInstance[isCurrentlyUnmuted ? 'mute' : 'unmute']();
         }
+        if(isCurrentlyUnmuted)
+            localStorage.setItem('muted', true)
+        else localStorage.removeItem('muted')
     }
     
     _handleFullscreenChange() {

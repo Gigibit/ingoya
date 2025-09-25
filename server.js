@@ -22,6 +22,7 @@ import {
   getStreamIdBySessionId,
   updateDbParticipantCount,
   getRandomActiveStream,
+  closeEverySession,
   getOrCreateTheiaSession
 } from './database.js';
 
@@ -314,6 +315,7 @@ app.post("/_interpret", protectRoute, async (req, res) => {
 // --- FUNZIONE DI AVVIO SERVER ---
 async function startServer() {
   db = await setupDatabase();
+  closeEverySession(db);
   app.set('db', db)
   const authRouter = createAuthRouter(db);
   app.use('/auth', authRouter);
