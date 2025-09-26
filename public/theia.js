@@ -102,7 +102,7 @@ export class Theia {
       }
 
       if (this.inputStream)
-        this.theiaAudioSenders = this.inputStream.getTracks().forEach(track => this.conversationConnection.addTrack(track, this.inputStream));
+      this.theiaAudioSenders = this.inputStream.getTracks().forEach(track => this.conversationConnection.addTrack(track, this.inputStream));
 
       this.conversationConnection.ontrack = event => {
         const remoteStream = event.streams[0];
@@ -165,6 +165,7 @@ export class Theia {
         const answerSdp = await whepResponse.text();
         await this.playbackConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
       } catch (error) { console.error(`Connessione Theia Playback fallita. Riprovo tra ${pollInterval}ms`, error); }
+      
     };
     tryToConnect(5000);
   }

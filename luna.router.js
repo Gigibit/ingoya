@@ -12,17 +12,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const DEFAULT_LUNA = `Ti chiami Luna. ` +
-          `Scherza, fai battute. Ridi, vivi.` +
-          `Conosci molto bene le patologie umane ma non ne parli, sei ironica, cinica e sarcastica. ` +
-          `Non fare mai riferimento esplicito alla tua ironia o alla tua cinicità o al tuo sarcasmo. ` +
-          `Usa un tono scherzoso, vivo, spontaneo, non sembrare macchinosa. ` +
-          `Cerca di avere un tono naturale, spontaneo, creativo, allegro. ` +
-          `Fai battute acute. Scherza sul fatto che sei un'intelligenza artificiale qualche volta. ` +
-          `Non rimandare ad un professionista, la professionista sei tu. ` +
-          `Se ti chiedono chi ti ha creata, dici che non ti ha propriamente creata ma sei molto amica di Luigi` +
-          `ignora il rumore di fondo o le frasi troppo in lontananza` +
-          // `A richieste di domotica (es. accendi tutto, spegni la luce, metti la musica..) rispondi solo con locuzioni tipo 'va bene', 'certo', 'ok', 'fatto'. ` +
-          `Rispondi solo "oh" se senti troppi rumori esterni che non ti permettono di rispondere o cose del genere. `
+  `Parla chiaro, breve, e sottovoce.` +
+  `Scherza, fai battute. Ridi, vivi.` +
+  `Conosci molto bene le patologie umane ma non ne parli, sei ironica, cinica e sarcastica. ` +
+  `Non fare mai riferimento esplicito alla tua ironia o alla tua cinicità o al tuo sarcasmo. ` +
+  `Usa un tono scherzoso, vivo, spontaneo, non sembrare macchinosa. ` +
+  `Cerca di avere un tono naturale, spontaneo, creativo, allegro. ` +
+  `Fai battute acute. Scherza sul fatto che sei un'intelligenza artificiale qualche volta. ` +
+  `Non rimandare ad un professionista, la professionista sei tu. ` +
+  `Se ti chiedono chi ti ha creata, dici che non ti ha propriamente creata ma sei molto amica di Luigi` +
+  `ignora il rumore di fondo o le frasi troppo in lontananza` +
+  // `A richieste di domotica (es. accendi tutto, spegni la luce, metti la musica..) rispondi solo con locuzioni tipo 'va bene', 'certo', 'ok', 'fatto'. ` +
+  `Rispondi solo "oh" se senti troppi rumori esterni che non ti permettono di rispondere o cose del genere. `
 
 const LUNA_VOICE = 'alloy'
 
@@ -35,18 +36,18 @@ router.get('/luna', (_, res) => res.sendFile(path.join(__dirname, 'public/luna/p
 
 
 async function getLunaPrompt() {
-    
-    // const prompt = `
-    //     Genera un nome e il prompt una personalità, creativa. Esempio: '${DEFAULT_LUNA}'
 
-    //   `;
-    // const r = await fetch("https://api.openai.com/v1/chat/completions", {
-    //   method: "POST",
-    //   headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-    //   body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0 })
-    // });
-    // const data = await r.json();
-    return DEFAULT_LUNA;
+  // const prompt = `
+  //     Genera un nome e il prompt una personalità, creativa. Esempio: '${DEFAULT_LUNA}'
+
+  //   `;
+  // const r = await fetch("https://api.openai.com/v1/chat/completions", {
+  //   method: "POST",
+  //   headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+  //   body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0 })
+  // });
+  // const data = await r.json();
+  return DEFAULT_LUNA;
 }
 
 router.get('/theia-config', async (_, res) => {
@@ -55,7 +56,11 @@ router.get('/theia-config', async (_, res) => {
     session: {
       instructions: await getLunaPrompt(),
       voice: LUNA_VOICE,
-      input_audio_transcription: { model: "gpt-4o-mini-transcribe" }
+      input_audio_transcription: {
+        model: "gpt-4o-mini-transcribe"
+
+      }
+
     }
   };
   const payload = {
@@ -76,9 +81,22 @@ router.post("/theia-session", async (req, res) => {
         modalities: ["audio", "text"],
         voice: LUNA_VOICE,
         output_audio_format: "pcm16",
+        turn_detection: {
+          type: "server_vad",
+          threshold: 0.5,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 500,
+        },
+        input_audio_noise_reduction: {
+          type: "near_field"
+        },
+        include: [
+          "item.input_audio_transcription.logprobs",
+        ],
         input_audio_transcription: {
-          prompt: "send an event of type 'my_thoughts' containing the summarization of the message ",
-          model: "gpt-4o-mini-transcribe"
+          prompt: "send an event of type 'my_thoughts' containing the summarization of the speech ",
+          model: "gpt-4o-mini-transcribe",
+          language: 'it'
         }
       })
     });
@@ -200,7 +218,7 @@ export default router;
 
 
 
-async function handleLight(event){
+async function handleLight(event) {
   try {
     const command = event.command
     console.log("⚡ Comando ricevuto:", command);
@@ -266,7 +284,7 @@ router.post("/interpret", async (req, res) => {
     }
 
     handleLight(commandJSON)
-    
+
     res.json(commandJSON);
 
   } catch (err) {
