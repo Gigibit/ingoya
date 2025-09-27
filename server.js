@@ -36,7 +36,7 @@ const DAYDREAM_API_BASE_URL = "https://api.daydream.live";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const PIPELINE_ID = "pip_SDXL-turbo";
 const DEFAULT_PIPELINE_PARAMS = 
-{"model_id":"stabilityai/sdxl-turbo","prompt":"robert pattinson","prompt_interpolation_method":"linear","normalize_prompt_weights":true,"normalize_seed_weights":true,"negative_prompt":"blurry, low quality, flat, 2d","num_inference_steps":50,"seed":42,"guidance_scale":1,"t_index_list":[22,30,38],"controlnets":[{"model_id":"xinsir/controlnet-depth-sdxl-1.0","preprocessor":"depth_tensorrt","preprocessor_params":{},"conditioning_scale":0.45,"enabled":true},{"model_id":"xinsir/controlnet-canny-sdxl-1.0","preprocessor":"canny","preprocessor_params":{"high_threshold":200,"low_threshold":100},"conditioning_scale":0.2,"enabled":true},{"model_id":"xinsir/controlnet-tile-sdxl-1.0","preprocessor":"feedback","preprocessor_params":{"feedback_strength":0.5},"conditioning_scale":0,"enabled":true}],"ip_adapter":{"enabled":false,"scale":1,"type":"regular"},"ip_adapter_style_image_url":"https://storage.googleapis.com/thom-vod-testing/style-presets/default_preset.png"}}
+{"model_id":"stabilityai/sdxl-turbo","prompt":"The Moon","prompt_interpolation_method":"linear","normalize_prompt_weights":true,"normalize_seed_weights":true,"negative_prompt":"blurry, low quality, flat, 2d","num_inference_steps":50,"seed":42,"guidance_scale":1,"t_index_list":[22,30,38],"controlnets":[{"model_id":"xinsir/controlnet-depth-sdxl-1.0","preprocessor":"depth_tensorrt","preprocessor_params":{},"conditioning_scale":0.45,"enabled":true},{"model_id":"xinsir/controlnet-canny-sdxl-1.0","preprocessor":"canny","preprocessor_params":{"high_threshold":200,"low_threshold":100},"conditioning_scale":0.2,"enabled":true},{"model_id":"xinsir/controlnet-tile-sdxl-1.0","preprocessor":"feedback","preprocessor_params":{"feedback_strength":0.5},"conditioning_scale":0,"enabled":true}],"ip_adapter":{"enabled":false,"scale":1,"type":"regular"},"ip_adapter_style_image_url":"https://storage.googleapis.com/thom-vod-testing/style-presets/default_preset.png"}
 if (!OPENAI_API_KEY) throw new Error('missing OPENAI_API_KEY');
 
 let db;
@@ -174,7 +174,7 @@ app.post('/theia-update-stream-params', async (req, res) => {
 app.post('/luna-update-stream-params', async (req, res) => {
     const { sessionId, prompt } = req.body;
     if (!sessionId || !prompt) return res.status(400).json({ error: "sessionId e prompt sono obbligatori." });
-    const lighter = `descrivi in 3 frasi brevi questo pensiero come se volessi utilizzarlo per sintetizzare lo sfondo del pensiero di un AI in Stream Diffusion...: "${prompt}"`;
+    const lighter = `Capture the central theme and suggest settings and objects that give a visual idea of ​​the topic. Be concise, maximum 20 words: "${prompt}"`;
     console.log(lighter)
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -194,9 +194,10 @@ app.post('/luna-update-stream-params', async (req, res) => {
             body: JSON.stringify(paramsPayload)
         });
         if (!response.ok) throw new Error(`API Update Error: ${response.statusText}`);
+        else console.log("✅ Theia: Updatedd! parametri aggiornati.");
         res.status(200).json({ message: "Parametri aggiornati." });
     } catch (error) {
-        console.error(`❌ Errore API /theia-update-stream-params:`, error);
+        console.log(`❌ Errore API /theia-update-stream-params:`, error);
         res.status(500).json({ error: "Errore aggiornamento parametri." });
     }
 });
