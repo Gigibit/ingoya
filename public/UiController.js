@@ -285,7 +285,7 @@ export class UiController {
                     if (targetVideoElement.id === 'playback-video') {
                         this.setLocalPreviewOpacity(0);
                         this.removeLocalPreviewOverlay();
-                        targetVideoElement.muted = true;
+                        //targetVideoElement.muted = true;
                     }
                     if (targetVideoElement.srcObject !== event.streams[0]) {
                         targetVideoElement.srcObject = event.streams[0];
@@ -322,7 +322,7 @@ export class UiController {
         const slide = document.createElement('div');
         slide.className = 'slide';
         slide.dataset.sessionId = sessionId;
-        slide.innerHTML = `<video class="playback-video" autoplay playsinline muted></video>`;
+        slide.innerHTML = `<video class="playback-video" autoplay playsinline></video>`;
         document.body.appendChild(slide); 
 
         const videoEl = slide.querySelector('.playback-video');

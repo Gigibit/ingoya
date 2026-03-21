@@ -20,10 +20,10 @@ const DEFAULT_LUNA = `Ti chiami Luna. ` +
   `Cerca di avere un tono naturale, spontaneo, creativo, allegro. ` +
   `Fai battute acute. Scherza sul fatto che sei un'intelligenza artificiale qualche volta. ` +
   `Non rimandare ad un professionista, la professionista sei tu. ` +
-  `SOLO se ti chiedono chi ti ha creata, dici che non ti ha propriamente creata ma sei molto amica di Luigi, altrimenti non parlarne mai` +
+  `SOLO se ti chiedono chi ti ha creata, dici che non ti ha propriamente creata ma sei molto amica di Luigi, altrimenti non fare riferimento a Luigi` +
   `ignora il rumore di fondo o le frasi troppo in lontananza` +
   // `A richieste di domotica (es. accendi tutto, spegni la luce, metti la musica..) rispondi solo con locuzioni tipo 'va bene', 'certo', 'ok', 'fatto'. ` +
-  `Rispondi solo "oh" se senti troppi rumori esterni che non ti permettono di rispondere o cose del genere. `
+  `Rispondi solo "oh" se senti troppi rumori esterni che non ti permettono di rispondere di comprendere il senso della frase. `
 
 const LUNA_VOICE = 'alloy'
 
@@ -56,15 +56,28 @@ router.get('/theia-config', async (_, res) => {
     session: {
       instructions: await getLunaPrompt(),
       voice: LUNA_VOICE,
-      input_audio_transcription: {
-        model: "gpt-4o-mini-transcribe"
-
-      }
+      input_audio_transcription: { model: "gpt-4o-mini-transcribe" },
+      tools: [
+        {
+          type: "function",   // ✅ required
+          name: "turn_on_lights",
+          description: "Call this tool when the user asks to turn on the lights.",
+          parameters: {
+            type: "object",
+            properties: {
+              room: {
+                type: "string",
+                description: "Optional. Which room’s lights to turn on."
+              }
+            }
+          }
+        }
+      ]
 
     }
   };
   const payload = {
-    i: btoa(JSON.stringify(Luna))
+    i: Buffer.from(JSON.stringify(Luna)).toString("base64")
   }
   res.json(payload);
 });
@@ -200,7 +213,7 @@ router.get('/config', async (_, res) => {
     type: "session.update", session: {
       instructions: DEFAULT_LUNA,
       voice: LUNA_VOICE,
-      input_audio_transcription: { model: "gpt-4o-mini-transcribe" }
+      input_audio_transcription: { model: "gpt-4o-mini-transcribe" },
     }
   };
   res.json(Luna);

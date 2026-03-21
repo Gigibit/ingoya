@@ -28,3 +28,13 @@ Please note: As this is an exploratory project, please open it externally (not i
 
 "Ciao, Luna." 👋🌙
 https://gigib.it/luna 🔗
+
+
+
+python generate.py \
+  --task i2v-14B \
+  --ckpt_dir ./Wan2.1-I2V-14B-720P \
+  --image ./../test_inputs/a.jpg \
+  --prompt  \
+  --size 1280*720 \
+  --save_file ./../outputs/a.mp4

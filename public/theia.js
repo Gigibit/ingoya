@@ -78,7 +78,7 @@ export class Theia {
       });
       if (whipResponse.status !== 201) throw new Error(`Connessione WHIP di Theia fallita: ${whipResponse.statusText}`);
 
-      const whepUrl = whipResponse.headers.get('livepeer-playback-url')?.replace('fra-ai-mediamtx-0.livepeer.com', 'ai.livepeer.com');
+      const whepUrl = whipResponse.headers.get('livepeer-playback-url')?.replace('fra-ai-prod-livepeer-ai-gateway-0.livepeer.com', 'ai.livepeer.com');
       if (!whepUrl) throw new Error('Header livepeer-playback-url mancante per Theia.');
 
       const answerSdp = await whipResponse.text();
@@ -107,9 +107,6 @@ export class Theia {
       this.conversationConnection.ontrack = event => {
         const remoteStream = event.streams[0];
         console.log("🎤 Theia: prima traccia audio ricevuta.");
-
-        window.theiaSoul(remoteStream);
-
         if (!this.remoteAudioElement) {
           this.remoteAudioElement = document.createElement("audio");
           this.remoteAudioElement.autoplay = true;
@@ -174,6 +171,7 @@ export class Theia {
     this.outChannel = this.conversationConnection.createDataChannel("oai-events");
     this.outChannel.onmessage = async ev => {
       const msg = JSON.parse(ev.data);
+      console.log(msg)
       if (msg.type == 'response.audio_transcript.done') {
         let transcript = msg.transcript;
         const response = await fetch('/theia-update-stream-params', {
@@ -183,6 +181,34 @@ export class Theia {
         });
         if (!response.ok) console.error(`Errore aggiornamento parametri Theia: ${response.statusText}`);
       }
+
+         // 💡 Handle custom tool call: turn_on_lights
+    if (msg.type === "response.function_call_arguments.done" && msg.name === "turn_on_lights") {
+      try {
+        const args = JSON.parse(msg.arguments);
+        console.log("💡 Turn on lights event:", args);
+
+        // 👉 Here is where you trigger your actual IoT logic
+        // For demo, just log it
+        if (args.room) {
+          console.log(`Turning on lights in ${args.room}`);
+        } else {
+          console.log("Turning on lights (no room specified)");
+        }
+
+        // ✅ Send acknowledgment back to Realtime API
+        this.outChannel.send(JSON.stringify({
+          type: "conversation.item.create",
+          item: {
+            type: "function_call_output",
+            output: "Lights turned on",
+            call_id: msg.call_id
+          }
+        }));
+      } catch (err) {
+        console.error("❌ Error parsing turn_on_lights arguments:", err);
+      }
+    }
     };
 
     this.outChannel.onopen = async () => {

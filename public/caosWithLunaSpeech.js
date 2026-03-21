@@ -107,6 +107,8 @@ let config = HIGH_CONFIG
 // --- INIZIO CODICE AUDIO INTEGRATO ---
 
 // Variabili per l'analisi audio
+let analyser;
+let audioContext;
 let frequencyData;
 let source;
 let lastBassEnergy = 0, lastMidEnergy = 0;
@@ -1125,7 +1127,10 @@ function update () {
     }
     // --- FINE NUOVO CODICE ---
 
-    
+    // Integriamo l'analisi audio nel loop principale
+    if (analyser) { // Esegui solo se l'audio è stato inizializzato
+        analyzeAudio();
+    }
     applyInputs();
     if (!config.PAUSED)
         step(dt);
@@ -1781,3 +1786,157 @@ function hashCode(s) {
     }
     return hash;
 };
+
+async function initAudio(stream) {
+
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+    }
+
+    source = audioContext.createMediaStreamSource(stream);
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 512; // O 1024 per ancora più dettagli
+    analyser.smoothingTimeConstant = 0.8;
+    frequencyData = new Uint8Array(analyser.frequencyBinCount);
+    source.connect(analyser);
+    // Iniziamo a splattare colori casuali all'avvio
+    multipleSplats(parseInt(Math.random() * 20) + 5);
+}
+function analyzeAudio() {
+
+    if (!analyser) return;
+    analyser.getByteFrequencyData(frequencyData);
+
+    const bassBins = 4;
+    const midBinsStart = 10, midBinsEnd = 40;
+    const highBinsStart = 50, highBinsEnd = 100;
+
+    let bassEnergy = 0, midEnergy = 0, highEnergy = 0;
+
+    for (let i = 0; i < bassBins; i++) bassEnergy += frequencyData[i];
+    for (let i = midBinsStart; i < midBinsEnd; i++) midEnergy += frequencyData[i];
+    for (let i = highBinsStart; i < highBinsEnd; i++) highEnergy += frequencyData[i];
+
+    bassEnergy /= bassBins * 255;
+    midEnergy /= (midBinsEnd - midBinsStart) * 255;
+    highEnergy /= (highBinsEnd - highBinsStart) * 255;
+
+    smoothedBass += (bassEnergy - smoothedBass) * 0.2;
+    smoothedMid += (midEnergy - smoothedMid) * 0.2;
+    smoothedHigh += (highEnergy - smoothedHigh) * 0.2;
+
+    // --- LOGICA DI MODULAZIONE CONTINUA (invariata) ---
+    const totalEnergy = (smoothedBass + smoothedMid + smoothedHigh);
+    config.CURL = 10 + smoothedMid * 60;
+    config.PRESSURE = 0.6 + Math.min(totalEnergy * 0.4, 0.3);
+    config.DENSITY_DISSIPATION = 1.0 - totalEnergy * 0.08;
+    config.VELOCITY_DISSIPATION = 0.25 - totalEnergy * 0.05;
+
+    // --- NUOVA LOGICA: Effetti continui per suoni sostenuti ---
+    const SUSTAINED_BASS_THRESHOLD = 0.35; // Soglia per il "ribollire" dei bassi
+    const SUSTAINED_MID_THRESHOLD = 0.25;  // Soglia per i "vortici" dei medi
+
+    // Se i bassi sono costantemente alti, crea delle "bolle" rosse
+    if (smoothedBass > SUSTAINED_BASS_THRESHOLD && Math.random() > 0.9) { // Il Math.random() evita di creare troppi splat
+        const x = Math.random();
+        const y = Math.random();
+        const dx = (Math.random() - 0.5) * 200; // Meno forza rispetto al beat
+        const dy = (Math.random() - 0.5) * 200;
+        const color = { r: 0.6, g: 0.1, b: 0.5 };
+        const originalRadius = config.SPLAT_RADIUS;
+        config.SPLAT_RADIUS = 0.15; // Raggio più piccolo
+        splat(x, y, dx, dy, color);
+        config.SPLAT_RADIUS = originalRadius;
+    }
+
+    // Se i medi sono costantemente alti, crea dei "vortici" verdi
+    if (smoothedMid > SUSTAINED_MID_THRESHOLD && Math.random() > 0.9) {
+        const x = Math.random();
+        const y = Math.random();
+        const dx = (Math.random() - 0.5) * 300;
+        const dy = (Math.random() - 0.5) * 300;
+        const color = { r: 0.5, g: 0.1, b: 0.6 };
+        const originalRadius = config.SPLAT_RADIUS;
+        config.SPLAT_RADIUS = 0.1;
+        splat(x, y, dx, dy, color);
+        config.SPLAT_RADIUS = originalRadius;
+    }
+
+    // --- LOGICA ESISTENTE: Reazioni ai picchi improvvisi (transienti) ---
+    const BEAT_THRESHOLD = 0.10;
+    const MID_THRESHOLD = 0.08;
+    const BEAT_COOLDOWN = 80;
+    const MID_COOLDOWN = 60;
+    const currentTime = Date.now();
+
+    // Esplosione per i picchi dei bassi
+    if (bassEnergy > lastBassEnergy + BEAT_THRESHOLD && currentTime > lastBeatTime + BEAT_COOLDOWN) {
+        lastBeatTime = currentTime;
+        const x = 0.25 + Math.random() * 0.5;
+        const y = 0.25 + Math.random() * 0.5;
+        const forceMultiplier = 1000 + bassEnergy * 4000;
+        const dx = (Math.random() - 0.5) * forceMultiplier;
+        const dy = (Math.random() - 0.5) * forceMultiplier;
+        const color = { r: 0.8 + Math.random() * 0.2, g: smoothedMid * 0.5, b: Math.random() * 0.2 };
+        const originalRadius = config.SPLAT_RADIUS;
+        config.SPLAT_RADIUS = 0.5 + bassEnergy * 0.8;
+        splat(x, y, dx, dy, color);
+        config.SPLAT_RADIUS = originalRadius;
+    }
+
+    lastBassEnergy = bassEnergy;
+
+    // Hit per i picchi dei medi
+    if (midEnergy > lastMidEnergy + MID_THRESHOLD && currentTime > lastMidTime + MID_COOLDOWN) {
+        lastMidTime = currentTime;
+    }
+
+    lastMidEnergy = midEnergy;
+
+    // Scintille per alte frequenze (invariate)
+    if (smoothedHigh > 0.25 && Math.random() > 0.85) {
+
+    }
+    // --- NUOVA LOGICA: CONTROLLO DEL PUNTATORE AUDIO ---
+    // Aggiorniamo il nostro puntatore virtuale ad ogni frame
+
+
+    // 1. Posizione (texcoordX, texcoordY)
+    // Facciamo muovere il puntatore in cerchio, con la velocità e il raggio influenzati dal suono.
+    const time = Date.now() * 0.001;
+    const radius = 0.2 + smoothedMid * 0.2;
+    audioPointer.texcoordX = 0.5 + Math.cos(time * 0.8 + smoothedHigh * 2) * radius;
+    audioPointer.texcoordY = 0.5 + Math.sin(time * 0.5 + smoothedBass * 2) * radius;
+
+    // 2. Movimento (deltaX, deltaY) -> Questo crea lo "splat"
+    // Il "delta" è la variazione di energia rispetto al frame precedente.
+    // Un aumento improvviso di energia crea una "spinta" forte.
+    const deltaEnergy = totalEnergy - lastTotalEnergy;
+    const force = Math.min(deltaEnergy * 8000, 2000); // Limita la forza massima
+
+    // La direzione della spinta è influenzata dalle frequenze
+    const angle = (smoothedHigh - smoothedBass) * Math.PI * 2;
+    audioPointer.deltaX = Math.cos(angle) * force;
+    audioPointer.deltaY = Math.sin(angle) * force;
+
+    // 3. Colore
+    // Il colore dello splat dipende dalle frequenze dominanti
+    audioPointer.color = {
+        r: (smoothedBass + smoothedMid * 0.5) * 0.9, // Rosso da bassi e medi
+        g: smoothedMid * 0.1,                       // Pochissimo verde dai medi
+        b: (smoothedHigh + smoothedMid * 0.5) * 0.9 // Blu da alti e medi
+    };
+    // 4. Attivazione
+    // Diciamo al sistema che il puntatore si è "mosso" per attivare lo splat
+    audioPointer.moved = true;
+
+    // Aggiorna l'energia per il prossimo frame
+    lastTotalEnergy = totalEnergy;
+}
+
+//TODO: MAKE A CLASS
+window.theiaSoul = initAudio

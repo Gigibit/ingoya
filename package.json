@@ -12,6 +12,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
     "@google/generative-ai": "^0.24.1",
     "@simplewebauthn/server": "^13.1.2",
     "bcrypt": "^6.0.0",
@@ -35,3 +36,5 @@
     "yt-dlp-exec": "^1.0.2"
   }
 }
+
+
