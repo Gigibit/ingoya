@@ -198,59 +198,75 @@ app.post("/luna-update-stream-params", async (req, res) => {
     });
   }
 
-  const payload = { params };
+  const payloadCandidates = [
+    { params },
+    { pipeline_params: params },
+    params,
+  ];
   const candidateEndpoints = [
     `${apiBaseUrl}/v1/streams/${encodeURIComponent(streamId)}`,
     `${apiBaseUrl}/v1/stream/${encodeURIComponent(streamId)}`,
     `${apiBaseUrl}/v1/streams/${encodeURIComponent(streamId)}/params`,
+    `${apiBaseUrl}/v1/streams/${encodeURIComponent(streamId)}/update`,
+    `${apiBaseUrl}/v1/streams/${encodeURIComponent(streamId)}/pipeline_params`,
   ];
+  const candidateMethods = ["PATCH", "PUT"];
 
   const errors = [];
 
   for (const endpoint of candidateEndpoints) {
-    try {
-      const response = await fetch(endpoint, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "x-client-source": "streamdiffusion-web",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+    for (const method of candidateMethods) {
+      for (const payload of payloadCandidates) {
+        try {
+          const response = await fetch(endpoint, {
+            method,
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "x-client-source": "streamdiffusion-web",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
 
-      let providerBody = null;
-      try {
-        providerBody = await response.json();
-      } catch {
-        providerBody = await response.text();
+          let providerBody = null;
+          try {
+            providerBody = await response.json();
+          } catch {
+            providerBody = await response.text();
+          }
+
+          if (response.ok) {
+            logger.info("Aggiornamento stream riuscito", { endpoint, method, payload });
+            return res.json({ ok: true, endpoint, method, payload, providerBody });
+          }
+
+          const attemptError = {
+            endpoint,
+            method,
+            payload,
+            status: response.status,
+            statusText: response.statusText,
+            providerBody,
+          };
+
+          errors.push(attemptError);
+
+          if (response.status !== 404) {
+            return sendError(res, 502, "Errore provider durante aggiornamento stream", {
+              route: "/luna-update-stream-params",
+              ...attemptError,
+            });
+          }
+        } catch (error) {
+          return sendError(res, 500, "Errore interno chiamata provider aggiornamento stream", {
+            route: "/luna-update-stream-params",
+            endpoint,
+            method,
+            payload,
+            details: error?.message,
+          });
+        }
       }
-
-      if (response.ok) {
-        return res.json({ ok: true, endpoint, providerBody });
-      }
-
-      const attemptError = {
-        endpoint,
-        status: response.status,
-        statusText: response.statusText,
-        providerBody,
-      };
-
-      errors.push(attemptError);
-
-      if (response.status !== 404) {
-        return sendError(res, 502, "Errore provider durante aggiornamento stream", {
-          route: "/luna-update-stream-params",
-          ...attemptError,
-        });
-      }
-    } catch (error) {
-      return sendError(res, 500, "Errore interno chiamata provider aggiornamento stream", {
-        route: "/luna-update-stream-params",
-        endpoint,
-        details: error?.message,
-      });
     }
   }
 
@@ -261,11 +277,25 @@ app.post("/luna-update-stream-params", async (req, res) => {
   });
 });
 
-
 app.get('/self-drawing', (_, res) => res.sendFile(path.join(__dirname, 'public', 'self_drawing.html')));
 app.get('/paint', (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/draw', (_, res) => res.sendFile(path.join(__dirname, "public", "draw.html")));
 app.get('/', (_, res) => res.sendFile(path.join(__dirname, "public", "summarize.html")));
+
+app.use((req, res) => {
+  return sendError(res, 404, "Route non trovata", {
+    route: req.originalUrl,
+    method: req.method,
+  });
+});
+
+app.use((err, req, res, _next) => {
+  return sendError(res, 500, "Errore interno server", {
+    route: req.originalUrl,
+    method: req.method,
+    details: err?.message,
+  });
+});
 
 io.on('connection', (socket) => {
   logger.info(`✅ Utente connesso: ${socket.id}`);
