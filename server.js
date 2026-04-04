@@ -35,16 +35,24 @@ const io = new Server(httpServer, {
 app.use(express.json());
 app.use(express.static("public"));
 
+const logger = {
+  info: (...args) => console.log('[INFO]', ...args),
+  error: (...args) => console.error('[ERROR]', ...args),
+};
 
-
-
+function sendError(res, statusCode, message, context = {}) {
+  logger.error(message, context);
+  return res.status(statusCode).json({ error: message });
+}
 
 app.post("/interpret", async (req, res) => {
   try {
     const { text } = req.body;
-    if (!text) return res.status(400).json({ error: "Manca testo" });
+    if (!text) {
+      return sendError(res, 400, "Manca testo", { route: "/interpret" });
+    }
 
-    console.log("Testo ricevuto:", text);
+    logger.info("Testo ricevuto:", text);
 
     const prompt = `
       Analizza la frase dell'utente e restituisci una SEMPRE E SOLO UNA lista di 7 keywords riassuntive ed esplicative separate da una virgola (eg. "dio, relgione, musica, solitudine, compagnia..") "${text}"
@@ -64,17 +72,102 @@ app.post("/interpret", async (req, res) => {
     });
 
     const data = await r.json();
-    console.log(data.choices?.[0]?.message)
+    logger.info("Risposta OpenAI ricevuta.", { hasChoices: Boolean(data.choices?.length) });
+    if (!r.ok) {
+      return sendError(res, 502, "Errore dal provider OpenAI", {
+        route: "/interpret",
+        providerStatus: r.status,
+        providerBody: data,
+      });
+    }
+
     let responseText = data.choices?.[0]?.message?.content;
 
     // Pulizia della risposta: rimuove blocchi di codice o spazi extra
-    responseText = responseText.trim();
+    responseText = responseText?.trim();
+    if (!responseText) {
+      return sendError(res, 502, "Risposta OpenAI non valida o vuota", {
+        route: "/interpret",
+        providerBody: data,
+      });
+    }
 
     res.json(responseText);
 
   } catch (err) {
-    console.error("Errore interpretazione comando:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, "Errore interpretazione comando", {
+      route: "/interpret",
+      details: err?.message,
+    });
+  }
+});
+
+app.post("/stream-session", async (req, res) => {
+  const apiKey = process.env.DAYDREAM_API_KEY || process.env.LIVEPEER_API_KEY;
+  const apiBaseUrl = process.env.DAYDREAM_API_BASE_URL || "https://api.daydream.live";
+  const pipelineId = process.env.DAYDREAM_PIPELINE_ID || process.env.LIVEPEER_PIPELINE_ID;
+
+  if (!apiKey || !pipelineId) {
+    return sendError(res, 500, "Configurazione stream mancante: DAYDREAM_API_KEY o DAYDREAM_PIPELINE_ID", {
+      route: "/stream-session",
+    });
+  }
+
+  const {
+    prompt = "describe human beings.",
+    negativePrompt = "blurry, low quality, flat, 2d",
+    modelId = "stabilityai/sd-turbo",
+  } = req.body ?? {};
+
+  const initPayload = {
+    name: "theia-stream-session",
+    pipeline_id: pipelineId,
+    pipeline_params: {
+      model_id: modelId,
+      prompt,
+      negative_prompt: negativePrompt,
+      num_inference_steps: 50,
+      seed: 42,
+      t_index_list: [2, 4, 6],
+    },
+  };
+
+  try {
+    const createStreamResponse = await fetch(`${apiBaseUrl}/v1/streams`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(initPayload),
+    });
+
+    const providerBody = await createStreamResponse.json();
+    if (!createStreamResponse.ok) {
+      return sendError(res, 502, "Errore provider durante la creazione stream", {
+        route: "/stream-session",
+        providerStatus: createStreamResponse.status,
+        providerBody,
+      });
+    }
+
+    if (!providerBody?.id || !providerBody?.whip_url) {
+      return sendError(res, 502, "Risposta provider stream incompleta", {
+        route: "/stream-session",
+        providerBody,
+      });
+    }
+
+    return res.json({
+      streamId: providerBody.id,
+      whipUrl: providerBody.whip_url,
+      createdAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    return sendError(res, 500, "Errore interno creazione stream-session", {
+      route: "/stream-session",
+      details: error?.message,
+    });
   }
 });
 
@@ -85,32 +178,32 @@ app.get('/draw', (_, res) => res.sendFile(path.join(__dirname, "public", "draw.h
 app.get('/', (_, res) => res.sendFile(path.join(__dirname, "public", "summarize.html")));
 
 io.on('connection', (socket) => {
-  console.log(`✅ Utente connesso: ${socket.id}`);
+  logger.info(`✅ Utente connesso: ${socket.id}`);
 
   socket.on('create-session', (sessionId) => {
     socket.join(sessionId);
-    console.log(`🏡 Host ${socket.id} ha creato la sessione: ${sessionId}`);
+    logger.info(`🏡 Host ${socket.id} ha creato la sessione: ${sessionId}`);
   });
 
   socket.on('join-session', (sessionId) => {
     socket.join(sessionId);
-    console.log(`🔗 Partecipante ${socket.id} si è unito alla sessione: ${sessionId}`);
+    logger.info(`🔗 Partecipante ${socket.id} si è unito alla sessione: ${sessionId}`);
     
     socket.emit('session-joined', sessionId);
     socket.to(sessionId).emit('user-joined', socket.id);
   });
 
   socket.on('share-url', ({ sessionId, url }) => {
-    console.log(`🚀 URL [${url}] ricevuto per la sessione ${sessionId}`);
+    logger.info(`🚀 URL [${url}] ricevuto per la sessione ${sessionId}`);
     socket.to(sessionId).emit('url-received', url);
   });
 
   socket.on('share-user-message', ({ sessionId, text, interpolation }) => {
-    console.log(`🚀 si chiacchiera pure qui: ${text}`);
+    logger.info(`🚀 si chiacchiera pure qui: ${text}`);
     socket.to(sessionId).emit('user-message-received', { text, interpolation });
   });
 
-  socket.on('disconnect', () => console.log(`❌ Utente disconnesso: ${socket.id}`));
+  socket.on('disconnect', () => logger.info(`❌ Utente disconnesso: ${socket.id}`));
 });
 
-httpServer.listen(PORT, () => console.log(`🚀 Server avviato su http://localhost:${PORT}`));
+httpServer.listen(PORT, () => logger.info(`🚀 Server avviato su http://localhost:${PORT}`));
