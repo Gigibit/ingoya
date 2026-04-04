@@ -107,8 +107,8 @@ app.post("/stream-session", async (req, res) => {
   const apiBaseUrl = process.env.DAYDREAM_API_BASE_URL || "https://api.daydream.live";
   const pipelineId = process.env.DAYDREAM_PIPELINE_ID || process.env.LIVEPEER_PIPELINE_ID;
 
-  if (!apiKey || !pipelineId) {
-    return sendError(res, 500, "Configurazione stream mancante: DAYDREAM_API_KEY o DAYDREAM_PIPELINE_ID", {
+  if (!apiKey) {
+    return sendError(res, 500, "Configurazione stream mancante: DAYDREAM_API_KEY", {
       route: "/stream-session",
     });
   }
@@ -117,19 +117,32 @@ app.post("/stream-session", async (req, res) => {
     prompt = "describe human beings.",
     negativePrompt = "blurry, low quality, flat, 2d",
     modelId = "stabilityai/sd-turbo",
+    pipelineId: bodyPipelineId,
+    pipelineParams,
   } = req.body ?? {};
+
+  const resolvedPipelineId = bodyPipelineId || pipelineId;
+  if (!resolvedPipelineId) {
+    return sendError(res, 500, "Configurazione stream mancante: DAYDREAM_PIPELINE_ID", {
+      route: "/stream-session",
+      body: req.body,
+    });
+  }
+
+  const resolvedPipelineParams = {
+    model_id: modelId,
+    prompt,
+    negative_prompt: negativePrompt,
+    num_inference_steps: 50,
+    seed: 42,
+    t_index_list: [2, 4, 6],
+    ...(pipelineParams && typeof pipelineParams === "object" ? pipelineParams : {}),
+  };
 
   const initPayload = {
     name: "theia-stream-session",
-    pipeline_id: pipelineId,
-    pipeline_params: {
-      model_id: modelId,
-      prompt,
-      negative_prompt: negativePrompt,
-      num_inference_steps: 50,
-      seed: 42,
-      t_index_list: [2, 4, 6],
-    },
+    pipeline_id: resolvedPipelineId,
+    pipeline_params: resolvedPipelineParams,
   };
 
   try {

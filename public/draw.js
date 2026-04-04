@@ -42,8 +42,7 @@ if (sessionId || window.selfMode) {
     if (window.selfMode) initSelf();
     else initShared();
 
-    const API_KEY = "sk_iK9uX4DPSmmGekB8McXnJGEKB3wWWozjtKKjUKa3WBVirYxMtXL5GLrZiTJZQ8Pb";
-    const API_BASE_URL = "https://api.daydream.live";
+    const API_BASE_URL = window.location.origin;
     const PIPELINE_ID = "pip_qpUgXycjWF6YMeSL";
 
     let streamId = null;
@@ -102,18 +101,20 @@ if (sessionId || window.selfMode) {
             }
             console.log("Creazione di una nuova risorsa stream su Livepeer...");
             const initPayload = {
-                "name": "boya-stream", "pipeline_id": PIPELINE_ID,
-                "pipeline_params": {
+                "prompt": ___INITIAL_PROMPT_VALUE,
+                "negativePrompt": ___INITIAL_NEGATIVE_PROMPT_VALUE,
+                "pipelineId": PIPELINE_ID,
+                "pipelineParams": {
                     "model_id": "stabilityai/sd-turbo", "prompt": ___INITIAL_PROMPT_VALUE, "negative_prompt": ___INITIAL_NEGATIVE_PROMPT_VALUE, "num_inference_steps": 50, "seed": 42, "t_index_list": [2, 4, 6], "controlnets": [{"conditioning_scale": 0.4,"control_guidance_end": 1,"control_guidance_start": 0,"enabled": true,"model_id": "thibaud/controlnet-sd21-openpose-diffusers","preprocessor": "pose_tensorrt","preprocessor_params": {}},{"conditioning_scale": 0.14,"control_guidance_end": 1,"control_guidance_start": 0,"enabled": true,"model_id": "thibaud/controlnet-sd21-hed-diffusers","preprocessor": "soft_edge","preprocessor_params": {}},{"conditioning_scale": 0.27,"control_guidance_end": 1,"control_guidance_start": 0,"enabled": true,"model_id": "thibaud/controlnet-sd21-canny-diffusers","preprocessor": "canny","preprocessor_params": {"high_threshold": 200,"low_threshold": 100}},{"conditioning_scale": 0.34,"control_guidance_end": 1,"control_guidance_start": 0,"enabled": true,"model_id": "thibaud/controlnet-sd21-depth-diffusers","preprocessor": "depth_tensorrt","preprocessor_params": {}},{"conditioning_scale": 0.66,"control_guidance_end": 1,"control_guidance_start": 0,"enabled": true,"model_id": "thibaud/controlnet-sd21-color-diffusers","preprocessor": "passthrough","preprocessor_params": {}}]
                 }
             };
-            const createStreamResponse = await fetch(`${API_BASE_URL}/v1/streams`, {
-                method: 'POST', headers: { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(initPayload)
+            const createStreamResponse = await fetch(`${API_BASE_URL}/stream-session`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(initPayload)
             });
             if (!createStreamResponse.ok) throw new Error(`API Error: ${createStreamResponse.statusText}`);
             const streamData = await createStreamResponse.json();
-            streamId = streamData.id;
-            const whipUrl = streamData.whip_url;
+            streamId = streamData.streamId;
+            const whipUrl = streamData.whipUrl;
             console.log("Avvio connessione WHIP con la nuova sorgente...");
             peerConnection = new RTCPeerConnection();
             sourceStream.getTracks().forEach(track => peerConnection.addTrack(track, sourceStream));
@@ -147,11 +148,11 @@ if (sessionId || window.selfMode) {
     async function handleUpdateParams() {
         if (!streamId) return;
         updateBtn.disabled = true;
-        const paramsPayload = { "params": { "prompt": promptInput.value } };
-        try {
-            const response = await fetch(`${API_BASE_URL}/v1/streams/${streamId}`, {
-                method: 'PATCH', headers: { 'Authorization': `Bearer ${API_KEY}`, 'x-client-source': 'streamdiffusion-web', 'Content-Type': 'application/json' }, body: JSON.stringify(paramsPayload)
-            });
+            const paramsPayload = { streamId, params: { "prompt": promptInput.value } };
+            try {
+                const response = await fetch(`${API_BASE_URL}/luna-update-stream-params`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(paramsPayload)
+                });
             if (!response.ok) throw new Error(`API Update Error: ${response.statusText}`);
             promptInput.value = '';
         } catch (error) {
