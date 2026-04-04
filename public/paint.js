@@ -43,14 +43,22 @@ socket.on('user-message-received', (message) => {
     });
     document.dispatchEvent(popWords)
 });
+let playbackPeerConnection = null;
+let playbackRetryTimeoutId = null;
+
 async function handleStartPlayback(whepUrl, pollIntervall = 5000) {
-    setTimeout(async () => {
+    clearTimeout(playbackRetryTimeoutId);
+    playbackRetryTimeoutId = setTimeout(async () => {
         try {
-            const peerConnection = new RTCPeerConnection();
-            handleStartPlayback(whepUrl, pollIntervall+2000)
+            if (playbackPeerConnection) {
+                playbackPeerConnection.ontrack = null;
+                playbackPeerConnection.close();
+            }
+            playbackPeerConnection = new RTCPeerConnection();
+            handleStartPlayback(whepUrl, pollIntervall + 2000)
 
             // Questa funzione viene chiamata quando arriva uno stream video dal server
-            peerConnection.ontrack = (event) => {
+            playbackPeerConnection.ontrack = (event) => {
                 console.log("Traccia video ricevuta, la collego all'elemento video.");
                 if (videoElement.srcObject !== event.streams[0]) {
                     videoElement.srcObject = event.streams[0];
@@ -58,17 +66,17 @@ async function handleStartPlayback(whepUrl, pollIntervall = 5000) {
             };
 
             // WHEP richiede che il client invii un'offerta per ricevere il video
-            const offer = await peerConnection.createOffer({
+            const offer = await playbackPeerConnection.createOffer({
                 offerToReceiveVideo: true // Specifichiamo che vogliamo ricevere video
             });
-            await peerConnection.setLocalDescription(offer);
+            await playbackPeerConnection.setLocalDescription(offer);
             // Invia l'offerta (SDP) all'endpoint WHEP
             const whepResponse = await fetch(whepUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/sdp'
                 },
-                body: peerConnection.localDescription.sdp
+                body: playbackPeerConnection.localDescription.sdp
             });
 
             if (!whepResponse.ok) {
@@ -81,7 +89,10 @@ async function handleStartPlayback(whepUrl, pollIntervall = 5000) {
             console.log("--- Risposta SDP ricevuta dal server WHEP ---");
             console.log(answerSdp);
             // --------------------------
-            await peerConnection.setRemoteDescription({
+            if (playbackPeerConnection.signalingState !== 'have-local-offer') {
+                throw new Error(`Stato signaling non valido prima di setRemoteDescription: ${playbackPeerConnection.signalingState}`);
+            }
+            await playbackPeerConnection.setRemoteDescription({
                 type: 'answer',
                 sdp: answerSdp
             });
