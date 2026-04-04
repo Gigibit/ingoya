@@ -212,7 +212,7 @@ app.post("/luna-update-stream-params", async (req, res) => {
     });
   }
 
-  const endpoint = `${apiBaseUrl}/v1/streams/${encodeURIComponent(resolvedStreamId)}`;
+  const primaryEndpoint = `${apiBaseUrl}/v1/streams/${encodeURIComponent(resolvedStreamId)}`;
   const normalizedParams = {
     ...(params || {}),
     ...(typeof req.body?.prompt === "string" ? { prompt: req.body.prompt } : {}),
@@ -223,58 +223,79 @@ app.post("/luna-update-stream-params", async (req, res) => {
   };
 
   try {
-    const response = await fetch(endpoint, {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "x-client-source": "streamdiffusion-web",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
+    const attempts = [
+      { endpoint: primaryEndpoint, method: "PATCH" },
+      { endpoint: `${primaryEndpoint}/params`, method: "PATCH" },
+      { endpoint: `${primaryEndpoint}/params`, method: "POST" },
+      { endpoint: `${primaryEndpoint}/pipeline_params`, method: "PATCH" },
+      { endpoint: `${primaryEndpoint}/pipeline_params`, method: "POST" },
+    ];
 
-    let providerBody = null;
-    try {
-      providerBody = await response.json();
-    } catch {
-      providerBody = await response.text();
-    }
-
-    if (response.ok) {
-      logger.info("Aggiornamento stream riuscito", {
-        route: "/luna-update-stream-params",
-        endpoint,
-        streamId: resolvedStreamId,
+    let lastFailure = null;
+    for (const attempt of attempts) {
+      const response = await fetch(attempt.endpoint, {
+        method: attempt.method,
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "x-client-source": "streamdiffusion-web",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
       });
-      return res.json({ ok: true, endpoint, method: "PATCH", payload, providerBody });
+
+      let providerBody = null;
+      try {
+        providerBody = await response.json();
+      } catch {
+        providerBody = await response.text();
+      }
+
+      if (response.ok) {
+        logger.info("Aggiornamento stream riuscito", {
+          route: "/luna-update-stream-params",
+          endpoint: attempt.endpoint,
+          method: attempt.method,
+          streamId: resolvedStreamId,
+        });
+        return res.json({
+          ok: true,
+          endpoint: attempt.endpoint,
+          method: attempt.method,
+          payload,
+          providerBody,
+        });
+      }
+
+      lastFailure = {
+        route: "/luna-update-stream-params",
+        endpoint: attempt.endpoint,
+        method: attempt.method,
+        streamId: resolvedStreamId,
+        status: response.status,
+        statusText: response.statusText,
+        providerBody,
+        payload,
+      };
+
+      if (response.status !== 404) {
+        return sendError(res, 502, "Errore provider durante aggiornamento stream", lastFailure);
+      }
     }
 
-    const errorContext = {
-      route: "/luna-update-stream-params",
-      endpoint,
-      method: "PATCH",
-      streamId: resolvedStreamId,
-      status: response.status,
-      statusText: response.statusText,
-      providerBody,
-      payload,
-    };
-
-    if (response.status === 404) {
-      return sendError(
-        res,
-        502,
-        "API Update Error: stream non trovato sul provider. Verifica di usare l'id stream upstream (non un sessionId locale).",
-        errorContext,
-      );
-    }
-
-    return sendError(res, 502, "Errore provider durante aggiornamento stream", errorContext);
+    return sendError(
+      res,
+      502,
+      "API Update Error: stream non trovato sul provider. Verifica di usare l'id stream upstream (non un sessionId locale).",
+      {
+        ...lastFailure,
+        fallbackTried: attempts.map(({ method, endpoint }) => `${method} ${endpoint}`),
+      },
+    );
   } catch (error) {
     return sendError(res, 500, "Errore interno chiamata provider aggiornamento stream", {
       route: "/luna-update-stream-params",
-      endpoint,
-      method: "PATCH",
+      endpoint: primaryEndpoint,
+      method: "PATCH+fallback",
       streamId: resolvedStreamId,
       payload,
       details: error?.message,
