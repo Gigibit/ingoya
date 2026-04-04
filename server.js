@@ -45,6 +45,26 @@ function sendError(res, statusCode, message, context = {}) {
   return res.status(statusCode).json({ error: message });
 }
 
+function normalizeStreamId(rawStreamReference) {
+  const value = String(rawStreamReference || "").trim();
+  if (!value) return "";
+
+  if (!value.includes("://")) return value;
+
+  try {
+    const parsed = new URL(value);
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    const idCandidate = segments[segments.length - 1] || "";
+    return decodeURIComponent(idCandidate);
+  } catch (error) {
+    logger.error("Stream reference non valido, uso valore raw", {
+      value,
+      details: error?.message,
+    });
+    return value;
+  }
+}
+
 app.post("/interpret", async (req, res) => {
   try {
     const { text } = req.body;
@@ -190,7 +210,7 @@ app.post("/luna-update-stream-params", async (req, res) => {
   const apiBaseUrl = process.env.DAYDREAM_API_BASE_URL || "https://api.daydream.live";
 
   const { streamId, params, pipeline, sessionId } = req.body ?? {};
-  const resolvedStreamId = String(streamId || sessionId || "").trim();
+  const resolvedStreamId = normalizeStreamId(streamId || sessionId || "");
 
   if (!apiKey) {
     return sendError(res, 500, "Configurazione stream mancante: DAYDREAM_API_KEY", {
