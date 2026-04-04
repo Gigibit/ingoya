@@ -153,7 +153,16 @@ if (sessionId || window.selfMode) {
                 const response = await fetch(`${API_BASE_URL}/luna-update-stream-params`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(paramsPayload)
                 });
-            if (!response.ok) throw new Error(`API Update Error: ${response.statusText}`);
+            if (!response.ok) {
+                let backendError = '';
+                try {
+                    const body = await response.json();
+                    backendError = body?.error ? ` - ${body.error}` : '';
+                } catch (_) {
+                    // ignore parse error
+                }
+                throw new Error(`API Update Error: ${response.status} ${response.statusText}${backendError}`);
+            }
             promptInput.value = '';
         } catch (error) {
             console.error('Error updating parameters:', error);
