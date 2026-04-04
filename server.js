@@ -176,7 +176,8 @@ app.post("/luna-update-stream-params", async (req, res) => {
   const apiKey = process.env.DAYDREAM_API_KEY || process.env.LIVEPEER_API_KEY;
   const apiBaseUrl = process.env.DAYDREAM_API_BASE_URL || "https://api.daydream.live";
 
-  const { streamId, params } = req.body ?? {};
+  const { streamId, params, pipeline, sessionId } = req.body ?? {};
+  const resolvedStreamId = String(streamId || sessionId || "").trim();
 
   if (!apiKey) {
     return sendError(res, 500, "Configurazione stream mancante: DAYDREAM_API_KEY", {
@@ -184,7 +185,7 @@ app.post("/luna-update-stream-params", async (req, res) => {
     });
   }
 
-  if (!streamId || typeof streamId !== "string") {
+  if (!resolvedStreamId) {
     return sendError(res, 400, "Parametro obbligatorio mancante: streamId", {
       route: "/luna-update-stream-params",
       body: req.body,
@@ -198,83 +199,74 @@ app.post("/luna-update-stream-params", async (req, res) => {
     });
   }
 
-  const payloadCandidates = [
-    { params },
-    { pipeline_params: params },
-    params,
-  ];
-  const candidateEndpoints = [
-    `${apiBaseUrl}/v1/streams/${encodeURIComponent(streamId)}`,
-    `${apiBaseUrl}/v1/stream/${encodeURIComponent(streamId)}`,
-    `${apiBaseUrl}/v1/streams/${encodeURIComponent(streamId)}/params`,
-    `${apiBaseUrl}/v1/streams/${encodeURIComponent(streamId)}/update`,
-    `${apiBaseUrl}/v1/streams/${encodeURIComponent(streamId)}/pipeline_params`,
-  ];
-  const candidateMethods = ["PATCH", "PUT"];
+  const endpoint = `${apiBaseUrl}/v1/streams/${encodeURIComponent(resolvedStreamId)}`;
+  const normalizedParams = {
+    ...(params || {}),
+    ...(typeof req.body?.prompt === "string" ? { prompt: req.body.prompt } : {}),
+  };
+  const payload = {
+    ...(pipeline ? { pipeline } : {}),
+    params: normalizedParams,
+  };
 
-  const errors = [];
+  try {
+    const response = await fetch(endpoint, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "x-client-source": "streamdiffusion-web",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
 
-  for (const endpoint of candidateEndpoints) {
-    for (const method of candidateMethods) {
-      for (const payload of payloadCandidates) {
-        try {
-          const response = await fetch(endpoint, {
-            method,
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-              "x-client-source": "streamdiffusion-web",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload),
-          });
-
-          let providerBody = null;
-          try {
-            providerBody = await response.json();
-          } catch {
-            providerBody = await response.text();
-          }
-
-          if (response.ok) {
-            logger.info("Aggiornamento stream riuscito", { endpoint, method, payload });
-            return res.json({ ok: true, endpoint, method, payload, providerBody });
-          }
-
-          const attemptError = {
-            endpoint,
-            method,
-            payload,
-            status: response.status,
-            statusText: response.statusText,
-            providerBody,
-          };
-
-          errors.push(attemptError);
-
-          if (response.status !== 404) {
-            return sendError(res, 502, "Errore provider durante aggiornamento stream", {
-              route: "/luna-update-stream-params",
-              ...attemptError,
-            });
-          }
-        } catch (error) {
-          return sendError(res, 500, "Errore interno chiamata provider aggiornamento stream", {
-            route: "/luna-update-stream-params",
-            endpoint,
-            method,
-            payload,
-            details: error?.message,
-          });
-        }
-      }
+    let providerBody = null;
+    try {
+      providerBody = await response.json();
+    } catch {
+      providerBody = await response.text();
     }
-  }
 
-  return sendError(res, 502, "API Update Error: Not Found", {
-    route: "/luna-update-stream-params",
-    streamId,
-    attempts: errors,
-  });
+    if (response.ok) {
+      logger.info("Aggiornamento stream riuscito", {
+        route: "/luna-update-stream-params",
+        endpoint,
+        streamId: resolvedStreamId,
+      });
+      return res.json({ ok: true, endpoint, method: "PATCH", payload, providerBody });
+    }
+
+    const errorContext = {
+      route: "/luna-update-stream-params",
+      endpoint,
+      method: "PATCH",
+      streamId: resolvedStreamId,
+      status: response.status,
+      statusText: response.statusText,
+      providerBody,
+      payload,
+    };
+
+    if (response.status === 404) {
+      return sendError(
+        res,
+        502,
+        "API Update Error: stream non trovato sul provider. Verifica di usare l'id stream upstream (non un sessionId locale).",
+        errorContext,
+      );
+    }
+
+    return sendError(res, 502, "Errore provider durante aggiornamento stream", errorContext);
+  } catch (error) {
+    return sendError(res, 500, "Errore interno chiamata provider aggiornamento stream", {
+      route: "/luna-update-stream-params",
+      endpoint,
+      method: "PATCH",
+      streamId: resolvedStreamId,
+      payload,
+      details: error?.message,
+    });
+  }
 });
 
 app.get('/self-drawing', (_, res) => res.sendFile(path.join(__dirname, 'public', 'self_drawing.html')));
